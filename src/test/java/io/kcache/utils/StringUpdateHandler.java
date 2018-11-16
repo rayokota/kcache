@@ -14,15 +14,24 @@
  * limitations under the License.
  */
 
-package io.kcache;
+package io.kcache.utils;
 
-public interface CacheUpdateHandler<K, V> {
+import io.kcache.CacheUpdateHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class StringUpdateHandler implements CacheUpdateHandler<String, String> {
+
+    private static final Logger log = LoggerFactory.getLogger(StringUpdateHandler.class);
 
     /**
-     * Invoked on every new K,V pair written to the cache
+     * Invoked on every new K,V pair written to the store
      *
      * @param key   key associated with the data
-     * @param value data written to the cache
+     * @param value data written to the store
      */
-    void handleUpdate(K key, V value);
+    @Override
+    public void handleUpdate(String key, String value) {
+        log.info("Handle update for ({}, {})", key, value);
+    }
 }

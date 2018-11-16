@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2014-2018 Confluent Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,11 @@
 
 package io.kcache;
 
+import io.kcache.exceptions.CacheException;
+import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.exceptions.CacheTimeoutException;
+import io.kcache.utils.InMemoryCache;
+import io.kcache.utils.ShutdownableThread;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -27,6 +32,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -38,13 +44,17 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
+import java.io.IOException;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -61,187 +71,188 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaCache.class);
 
-    private final String topic;
-    private final int desiredReplicationFactor;
-    private final String groupId;
-    private final CacheUpdateHandler<K, V> cacheUpdateHandler;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Cache<K, V> localCache;
-    private final AtomicBoolean initialized = new AtomicBoolean(false);
-    private final int initTimeout;
-    private final int timeout;
-    private final String bootstrapBrokers;
-    private KafkaProducer<byte[], byte[]> producer;
-    private KafkaConsumer<byte[], byte[]> consumer;
-    private WorkerThread<K, V> kafkaTopicReader;
-    // Noop key is only used to help reliably determine last offset; reader thread ignores
-    // messages with this key
-    private final K noopKey;
-    private volatile long lastWrittenOffset = -1L;
-    private final CacheConfig config;
+    private String topic;
+    private int desiredReplicationFactor;
+    private String groupId;
+    private CacheUpdateHandler<K, V> cacheUpdateHandler;
+    private Serde<K> keySerde;
+    private Serde<V> valueSerde;
+    private Cache<K, V> localCache;
+    private AtomicBoolean initialized = new AtomicBoolean(false);
+    private int initTimeout;
+    private int timeout;
+    private String bootstrapBrokers;
+    private Producer<byte[], byte[]> producer;
+    private Consumer<byte[], byte[]> consumer;
+    private WorkerThread kafkaTopicReader;
+    private KafkaCacheConfig config;
 
-    public KafkaCache(CacheConfig config,
-                      CacheUpdateHandler<K, V> cacheUpdateHandler,
+    public KafkaCache(String bootstrapServers,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde) {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        setUp(new KafkaCacheConfig(props), keySerde, valueSerde, null, new InMemoryCache<>());
+    }
+
+    public KafkaCache(KafkaCacheConfig config,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde) {
+        setUp(config, keySerde, valueSerde, null, new InMemoryCache<>());
+    }
+
+    public KafkaCache(KafkaCacheConfig config,
                       Serde<K> keySerde,
                       Serde<V> valueSerde,
-                      Cache<K, V> localCache,
-                      K noopKey) throws CacheInitializationException {
-        this.topic = config.getString(CacheConfig.KAFKASTORE_TOPIC_CONFIG);
-        this.desiredReplicationFactor =
-            config.getInt(CacheConfig.KAFKASTORE_TOPIC_REPLICATION_FACTOR_CONFIG);
-        this.groupId = config.getString(CacheConfig.KAFKASTORE_GROUP_ID_CONFIG);
-        initTimeout = config.getInt(CacheConfig.KAFKASTORE_INIT_TIMEOUT_CONFIG);
-        timeout = config.getInt(CacheConfig.KAFKASTORE_TIMEOUT_CONFIG);
-        this.cacheUpdateHandler = cacheUpdateHandler;
+                      CacheUpdateHandler<K, V> cacheUpdateHandler,
+                      Cache<K, V> localCache) {
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, localCache);
+    }
+
+    private void setUp(KafkaCacheConfig config,
+                       Serde<K> keySerde,
+                       Serde<V> valueSerde,
+                       CacheUpdateHandler<K, V> cacheUpdateHandler,
+                       Cache<K, V> localCache) {
+        this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
+        this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
+        this.groupId = config.getString(KafkaCacheConfig.KAFKACACHE_GROUP_ID_CONFIG);
+        this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
+        this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
+        this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value) -> {
+        };
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.localCache = localCache;
-        this.noopKey = noopKey;
         this.config = config;
         this.bootstrapBrokers = config.bootstrapBrokers();
 
-        log.info("Initializing KafkaStore with broker endpoints: " + this.bootstrapBrokers);
+        log.info("Initializing Kafka cache with broker endpoints: " + this.bootstrapBrokers);
     }
 
     @Override
     public void init() throws CacheInitializationException {
         if (initialized.get()) {
             throw new CacheInitializationException(
-                "Illegal state while initializing store. Store was already initialized");
+                "Illegal state while initializing cache. Cache was already initialized");
         }
 
-        createOrVerifySchemaTopic();
-
-        // set the producer properties and initialize a Kafka producer client
-        Properties producerProps = new Properties();
-        addSchemaRegistryConfigsToClientProperties(config, producerProps);
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
-
-        producer = new KafkaProducer<byte[], byte[]>(producerProps);
-
-        Properties consumerProps = new Properties();
-        addSchemaRegistryConfigsToClientProperties(config, consumerProps);
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
-
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-
-        this.consumer = new KafkaConsumer<>(consumerProps);
+        createOrVerifyTopic();
+        this.producer = createProducer();
+        this.consumer = createConsumer();
 
         // start the background thread that subscribes to the Kafka topic and applies updates.
-        // the thread must be created after the schema topic has been created.
-        this.kafkaTopicReader =
-            new WorkerThread<>(this.bootstrapBrokers, topic, groupId,
-                this.cacheUpdateHandler, keySerde, valueSerde, this.localCache,
-                this.noopKey, this.config);
+        // the thread must be created after the topic has been created.
+        this.kafkaTopicReader = new WorkerThread();
+        this.kafkaTopicReader.readToEnd();
         this.kafkaTopicReader.start();
-
-        try {
-            waitUntilKafkaReaderReachesLastOffset(initTimeout);
-        } catch (CacheException e) {
-            throw new CacheInitializationException(e);
-        }
 
         boolean isInitialized = initialized.compareAndSet(false, true);
         if (!isInitialized) {
-            throw new CacheInitializationException("Illegal state while initializing store. Store "
+            throw new CacheInitializationException("Illegal state while initializing cache. Cache "
                 + "was already initialized");
         }
     }
 
-    public static void addSchemaRegistryConfigsToClientProperties(CacheConfig config,
-                                                                  Properties props) {
-        props.putAll(config.originalsWithPrefix("kafkastore."));
+    private Consumer<byte[], byte[]> createConsumer() {
+        Properties consumerProps = new Properties();
+        addKafkaCacheConfigsToClientProperties(consumerProps);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "kafka-cache-reader-" + this.topic);
+
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+
+        return new KafkaConsumer<>(consumerProps);
     }
 
+    private Producer<byte[], byte[]> createProducer() {
+        Properties producerProps = new Properties();
+        addKafkaCacheConfigsToClientProperties(producerProps);
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
 
-    private void createOrVerifySchemaTopic() throws CacheInitializationException {
+        return new KafkaProducer<>(producerProps);
+    }
+
+    private void addKafkaCacheConfigsToClientProperties(Properties props) {
+        props.putAll(config.originalsWithPrefix("kafkacache."));
+    }
+
+    private void createOrVerifyTopic() throws CacheInitializationException {
         Properties props = new Properties();
-        addSchemaRegistryConfigsToClientProperties(this.config, props);
+        addKafkaCacheConfigsToClientProperties(props);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
 
         try (AdminClient admin = AdminClient.create(props)) {
-            //
             Set<String> allTopics = admin.listTopics().names().get(initTimeout, TimeUnit.MILLISECONDS);
             if (allTopics.contains(topic)) {
-                verifySchemaTopic(admin);
+                verifyTopic(admin);
             } else {
-                createSchemaTopic(admin);
+                createTopic(admin);
             }
         } catch (TimeoutException e) {
             throw new CacheInitializationException(
-                "Timed out trying to create or validate schema topic configuration",
+                "Timed out trying to create or validate topic configuration",
                 e
             );
         } catch (InterruptedException | ExecutionException e) {
             throw new CacheInitializationException(
-                "Failed trying to create or validate schema topic configuration",
+                "Failed trying to create or validate topic configuration",
                 e
             );
         }
     }
 
-    private void createSchemaTopic(AdminClient admin) throws CacheInitializationException,
-        InterruptedException,
-        ExecutionException,
-        TimeoutException {
-        log.info("Creating schemas topic {}", topic);
+    private void createTopic(AdminClient admin) throws CacheInitializationException,
+        InterruptedException, ExecutionException, TimeoutException {
+        log.info("Creating topic {}", topic);
 
-        int numLiveBrokers = admin.describeCluster().nodes()
-            .get(initTimeout, TimeUnit.MILLISECONDS).size();
+        int numLiveBrokers = admin.describeCluster().nodes().get(initTimeout, TimeUnit.MILLISECONDS).size();
         if (numLiveBrokers <= 0) {
             throw new CacheInitializationException("No live Kafka brokers");
         }
 
-        int schemaTopicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
-        if (schemaTopicReplicationFactor < desiredReplicationFactor) {
-            log.warn("Creating the schema topic "
+        int topicReplicationFactor = Math.min(numLiveBrokers, desiredReplicationFactor);
+        if (topicReplicationFactor < desiredReplicationFactor) {
+            log.warn("Creating the topic "
                 + topic
                 + " using a replication factor of "
-                + schemaTopicReplicationFactor
+                + topicReplicationFactor
                 + ", which is less than the desired one of "
                 + desiredReplicationFactor + ". If this is a production environment, it's "
                 + "crucial to add more brokers and increase the replication factor of the topic.");
         }
 
-        NewTopic schemaTopicRequest = new NewTopic(topic, 1, (short) schemaTopicReplicationFactor);
-        schemaTopicRequest.configs(
+        NewTopic topicRequest = new NewTopic(topic, 1, (short) topicReplicationFactor);
+        topicRequest.configs(
             Collections.singletonMap(
                 TopicConfig.CLEANUP_POLICY_CONFIG,
                 TopicConfig.CLEANUP_POLICY_COMPACT
             )
         );
         try {
-            admin.createTopics(Collections.singleton(schemaTopicRequest)).all()
+            admin.createTopics(Collections.singleton(topicRequest)).all()
                 .get(initTimeout, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof TopicExistsException) {
                 // If topic already exists, ensure that it is configured correctly.
-                verifySchemaTopic(admin);
+                verifyTopic(admin);
             } else {
                 throw e;
             }
         }
     }
 
-    private void verifySchemaTopic(AdminClient admin) throws CacheInitializationException,
-        InterruptedException,
-        ExecutionException,
-        TimeoutException {
-        log.info("Validating schemas topic {}", topic);
+    private void verifyTopic(AdminClient admin) throws CacheInitializationException,
+        InterruptedException, ExecutionException, TimeoutException {
+        log.info("Validating topic {}", topic);
 
         Set<String> topics = Collections.singleton(topic);
         Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
@@ -250,12 +261,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         TopicDescription description = topicDescription.get(topic);
         final int numPartitions = description.partitions().size();
         if (numPartitions != 1) {
-            throw new CacheInitializationException("The schema topic " + topic + " should have only 1 "
+            throw new CacheInitializationException("The topic " + topic + " should have only 1 "
                 + "partition but has " + numPartitions);
         }
 
         if (description.partitions().get(0).replicas().size() < desiredReplicationFactor) {
-            log.warn("The replication factor of the schema topic "
+            log.warn("The replication factor of the topic "
                 + topic
                 + " is less than the desired one of "
                 + desiredReplicationFactor
@@ -270,32 +281,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .get(initTimeout, TimeUnit.MILLISECONDS);
         Config topicConfigs = configs.get(topicResource);
         String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
-        if (retentionPolicy == null || !TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
-            log.error("The retention policy of the schema topic " + topic + " is incorrect. "
+        if (!TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
+            log.error("The retention policy of the topic " + topic + " is incorrect. "
                 + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
-                + "deleting your schemas after a week. "
+                + "deleting your data after a week. "
                 + "Refer to Kafka documentation for more details on cleanup policies");
 
-            throw new CacheInitializationException("The retention policy of the schema topic " + topic
+            throw new CacheInitializationException("The retention policy of the topic " + topic
                 + " is incorrect. Expected cleanup.policy to be "
                 + "'compact' but it is " + retentionPolicy);
-
         }
-    }
-
-
-    /**
-     * Wait until the KafkaStore catches up to the last message in the Kafka topic.
-     */
-    public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws CacheException {
-        long offsetOfLastMessage = getLatestOffset(timeoutMs);
-        log.info("Wait to catch up until the offset of the last message at " + offsetOfLastMessage);
-        kafkaTopicReader.waitUntilOffset(offsetOfLastMessage, timeoutMs, TimeUnit.MILLISECONDS);
-        log.debug("Reached offset at " + offsetOfLastMessage);
-    }
-
-    public void markLastWrittenOffsetInvalid() {
-        lastWrittenOffset = -1L;
     }
 
     @Override
@@ -330,34 +325,31 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public V put(K key, V value) {
-        assertInitialized();
         if (key == null) {
             throw new CacheException("Key should not be null");
         }
 
+        assertInitialized();
         V oldValue = get(key);
 
         // write to the Kafka topic
-        ProducerRecord<byte[], byte[]> producerRecord = null;
+        ProducerRecord<byte[], byte[]> producerRecord;
         try {
             producerRecord =
-                new ProducerRecord<byte[], byte[]>(topic, 0, this.keySerde.serializer().serialize(topic, key),
+                new ProducerRecord<>(topic, 0, this.keySerde.serializer().serialize(topic, key),
                     value == null ? null : this.valueSerde.serializer().serialize(topic, value));
         } catch (Exception e) {
-            throw new CacheException("Error serializing schema while creating the Kafka produce "
-                + "record", e);
+            throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
 
-        boolean knownSuccessfulWrite = false;
         try {
-            log.trace("Sending record to KafkaStore topic: " + producerRecord);
+            log.trace("Sending record to Kafka cache topic: " + producerRecord);
             Future<RecordMetadata> ack = producer.send(producerRecord);
             RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
-            log.trace("Waiting for the local store to catch up to offset " + recordMetadata.offset());
-            this.lastWrittenOffset = recordMetadata.offset();
-            kafkaTopicReader.waitUntilOffset(this.lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
-            knownSuccessfulWrite = true;
+            log.trace("Waiting for the local cache to catch up to offset " + recordMetadata.offset());
+            long lastWrittenOffset = recordMetadata.offset();
+            kafkaTopicReader.waitUntilOffset(lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
@@ -367,10 +359,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 "Put operation timed out while waiting for an ack from Kafka", e);
         } catch (KafkaException ke) {
             throw new CacheException("Put operation to Kafka failed", ke);
-        } finally {
-            if (!knownSuccessfulWrite) {
-                this.lastWrittenOffset = -1L;
-            }
         }
 
         return oldValue;
@@ -389,37 +377,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @SuppressWarnings("unchecked")
     public V remove(Object key) {
         assertInitialized();
-        // deleteSchemaVersion from the Kafka topic by writing a null value for the key
+        // delete from the Kafka topic by writing a null value for the key
         return put((K) key, null);
     }
 
     @Override
     public void clear() {
-        log.debug("Shutting down Kafka store.");
-
-        consumer.wakeup();
-
-        try {
-            kafkaTopicReader.join();
-        } catch (InterruptedException e) {
-            throw new CacheException("Failed to stop KafkaBasedLog. Exiting without cleanly shutting " +
-                "down it's producer and consumer.", e);
-        }
-
-        try {
-            producer.close();
-        } catch (KafkaException e) {
-            log.error("Failed to stop Kafka cache producer", e);
-        }
-
-        try {
-            consumer.close();
-        } catch (KafkaException e) {
-            log.error("Failed to stop Kafka cache consumer", e);
-        }
-
-        localCache.clear();
-        log.debug("Kafka store shut down complete");
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -441,128 +405,63 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void close() {
-        clear();
+    public void close() throws IOException {
+        if (kafkaTopicReader != null) {
+            try {
+                kafkaTopicReader.shutdown();
+                log.debug("Kafka store reader thread shut down");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (producer != null) {
+            producer.close();
+            log.error("Kafka cache producer shut down");
+        }
+        localCache.close();
+        log.debug("Kafka cache shut down complete");
     }
 
-    /**
+    /*
      * For testing.
      */
-    WorkerThread<K, V> getWorkerThread() {
+    WorkerThread getWorkerThread() {
         return this.kafkaTopicReader;
     }
 
     private void assertInitialized() throws CacheException {
         if (!initialized.get()) {
-            throw new CacheException("Illegal state. Store not initialized yet");
+            throw new CacheException("Illegal state. Cache not initialized yet");
         }
     }
 
     /**
-     * Return the latest offset of the store topic.
-     *
-     * <p>The most reliable way to do so in face of potential Kafka broker failure is to produce
-     * successfully to the Kafka topic and get the offset of the returned metadata.
-     *
-     * <p>If the most recent write to Kafka was successful (signaled by lastWrittenOffset >= 0),
-     * immediately return that offset. Otherwise write a "Noop key" to Kafka in order to find the
-     * latest offset.
-     */
-    private long getLatestOffset(int timeoutMs) throws CacheException {
-        ProducerRecord<byte[], byte[]> producerRecord = null;
-
-        if (this.lastWrittenOffset >= 0) {
-            return this.lastWrittenOffset;
-        }
-
-        try {
-            producerRecord =
-                new ProducerRecord<byte[], byte[]>(topic, 0, this.keySerde.serializer().serialize(topic, noopKey), null);
-        } catch (Exception e) {
-            throw new CacheException("Failed to serialize noop key.", e);
-        }
-
-        try {
-            log.trace("Sending Noop record to KafkaStore to find last offset.");
-            Future<RecordMetadata> ack = producer.send(producerRecord);
-            RecordMetadata metadata = ack.get(timeoutMs, TimeUnit.MILLISECONDS);
-            this.lastWrittenOffset = metadata.offset();
-            log.trace("Noop record's offset is " + this.lastWrittenOffset);
-            return this.lastWrittenOffset;
-        } catch (Exception e) {
-            throw new CacheException("Failed to write Noop record to kafka store.", e);
-        }
-    }
-
-    /**
-     * Thread that reads schema registry state from the Kafka compacted topic and modifies
-     * the local store to be consistent.
+     * Thread that reads data from the Kafka compacted topic and modifies
+     * the local cache to be consistent.
      *
      * <p>On startup, this thread will always read from the beginning of the topic. We assume
      * the topic will always be small, hence the startup time to read the topic won't take
      * too long. Because the topic is always read from the beginning, the consumer never
      * commits offsets.
      */
-    public static class WorkerThread<K, V> extends Thread {
+    private class WorkerThread extends ShutdownableThread {
 
-        private final String topic;
         private final TopicPartition topicPartition;
-        private final String groupId;
-        private final CacheUpdateHandler<K, V> cacheUpdateHandler;
-        private final Serde<K> keySerde;
-        private final Serde<V> valueSerde;
-        private final Cache<K, V> localCache;
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
-        private Consumer<byte[], byte[]> consumer;
-        private long offsetInSchemasTopic = -1L;
-        // Noop key is only used to help reliably determine last offset; reader thread ignores
-        // messages with this key
-        private final K noopKey;
+        private long offsetInTopic = -1L;
 
-        private Properties consumerProps = new Properties();
-
-        public WorkerThread(String bootstrapBrokers,
-                                      String topic,
-                                      String groupId,
-                                      CacheUpdateHandler<K, V> cacheUpdateHandler,
-                                      Serde<K> keySerde,
-                                      Serde<V> valueSerde,
-                                      Cache<K, V> localCache,
-                                      K noopKey,
-                                      CacheConfig config) {
-            super("kafka-store-reader-thread-" + topic);  // this thread is not interruptible
+        public WorkerThread() {
+            super("kafka-cache-reader-thread-" + topic);
             offsetUpdateLock = new ReentrantLock();
             offsetReachedThreshold = offsetUpdateLock.newCondition();
-            this.topic = topic;
-            this.groupId = groupId;
-            this.cacheUpdateHandler = cacheUpdateHandler;
-            this.keySerde = keySerde;
-            this.valueSerde = valueSerde;
-            this.localCache = localCache;
-            this.noopKey = noopKey;
 
-            addSchemaRegistryConfigsToClientProperties(config, consumerProps);
-            consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
-            consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "KafkaStore-reader-" + this.topic);
-
-            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
-            consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-            consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-            consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                org.apache.kafka.common.serialization.ByteArrayDeserializer.class);
-
-            log.info("Kafka store reader thread starting consumer");
-            this.consumer = new KafkaConsumer<>(consumerProps);
-
-            // Include a few retries since topic creation may take some time to propagate and schema
-            // registry is often started immediately after creating the schemas topic.
+            // Include a few retries since topic creation may take some time to propagate and
+            // cache is often started immediately after creating the topic.
             int retries = 0;
             List<PartitionInfo> partitions = null;
             while (retries++ < 10) {
-                partitions = this.consumer.partitionsFor(this.topic);
+                partitions = consumer.partitionsFor(topic);
                 if (partitions != null && partitions.size() >= 1) {
                     break;
                 }
@@ -577,7 +476,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (partitions == null || partitions.size() < 1) {
                 throw new IllegalArgumentException("Unable to subscribe to the Kafka topic "
                     + topic
-                    + " backing this data store. Topic may not exist.");
+                    + " backing this data cache. Topic may not exist.");
             } else if (partitions.size() > 1) {
                 throw new IllegalStateException("Unexpected number of partitions in the "
                     + topic
@@ -585,117 +484,115 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
 
             this.topicPartition = new TopicPartition(topic, 0);
-            this.consumer.assign(Arrays.asList(this.topicPartition));
-            this.consumer.seekToBeginning(Arrays.asList(this.topicPartition));
+            consumer.assign(Collections.singletonList(this.topicPartition));
+            consumer.seekToBeginning(Collections.singletonList(this.topicPartition));
 
-            log.info("Initialized last consumed offset to " + offsetInSchemasTopic);
+            log.info("Initialized last consumed offset to " + offsetInTopic);
 
-            log.debug("Kafka store reader thread started");
+            log.debug("Kafka cache reader thread started");
+        }
+
+        private void readToEnd() {
+            Set<TopicPartition> assignment = consumer.assignment();
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
+            log.trace("Reading to end of offsets {}", endOffsets);
+
+            while (!endOffsets.isEmpty()) {
+                Iterator<Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<TopicPartition, Long> entry = it.next();
+                    if (consumer.position(entry.getKey()) >= entry.getValue())
+                        it.remove();
+                    else {
+                        poll();
+                        break;
+                    }
+                }
+            }
         }
 
         @Override
-        public void run() {
+        protected void doWork() {
             try {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Long.MAX_VALUE);
-                for (ConsumerRecord<byte[], byte[]> record : records) {
-                    K messageKey = null;
-                    try {
-                        messageKey = this.keySerde.deserializer().deserialize(topic, record.key());
-                    } catch (Exception e) {
-                        log.error("Failed to deserialize the schema or config key", e);
-                        continue;
-                    }
-
-                    if (messageKey.equals(noopKey)) {
-                        // If it's a noop, update local offset counter and do nothing else
-                        try {
-                            offsetUpdateLock.lock();
-                            offsetInSchemasTopic = record.offset();
-                            offsetReachedThreshold.signalAll();
-                        } finally {
-                            offsetUpdateLock.unlock();
-                        }
-                    } else {
-                        V message = null;
-                        try {
-                            message =
-                                record.value() == null ? null
-                                    : valueSerde.deserializer().deserialize(topic, record.value());
-                        } catch (Exception e) {
-                            log.error("Failed to deserialize a schema or config update", e);
-                            continue;
-                        }
-                        try {
-                            log.trace("Applying update ("
-                                + messageKey
-                                + ","
-                                + message
-                                + ") to the local store");
-                            if (message == null) {
-                                localCache.remove(messageKey);
-                            } else {
-                                localCache.put(messageKey, message);
-                            }
-                            this.cacheUpdateHandler.handleUpdate(messageKey, message);
-                            try {
-                                offsetUpdateLock.lock();
-                                offsetInSchemasTopic = record.offset();
-                                offsetReachedThreshold.signalAll();
-                            } finally {
-                                offsetUpdateLock.unlock();
-                            }
-                        } catch (Exception se) {
-                            log.error("Failed to add record from the Kafka topic"
-                                + topic
-                                + " the local store");
-                        }
-                    }
-                }
+                poll();
             } catch (WakeupException we) {
                 // do nothing because the thread is closing -- see shutdown()
             } catch (RecordTooLargeException rtle) {
                 throw new IllegalStateException(
-                    "Consumer threw RecordTooLargeException. A schema has been written that "
+                    "Consumer threw RecordTooLargeException. Data has been written that "
                         + "exceeds the default maximum fetch size.", rtle);
             } catch (RuntimeException e) {
-                log.error("KafkaStoreReader thread has died for an unknown reason.");
+                log.error("KafkaTopicReader thread has died for an unknown reason.");
                 throw new RuntimeException(e);
             }
         }
 
-        /*
-        @Override
-        public void shutdown() {
-            log.debug("Starting shutdown of KafkaStoreReaderThread.");
+        private void poll() {
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                K messageKey;
+                try {
+                    messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                } catch (Exception e) {
+                    log.error("Failed to deserialize the key", e);
+                    continue;
+                }
 
-            super.initiateShutdown();
-            if (consumer != null) {
-                consumer.wakeup();
+                V message;
+                try {
+                    message =
+                        record.value() == null ? null
+                            : valueSerde.deserializer().deserialize(topic, record.value());
+                } catch (Exception e) {
+                    log.error("Failed to deserialize a value", e);
+                    continue;
+                }
+                try {
+                    log.trace("Applying update ("
+                        + messageKey
+                        + ","
+                        + message
+                        + ") to the local cache");
+                    if (message == null) {
+                        localCache.remove(messageKey);
+                    } else {
+                        localCache.put(messageKey, message);
+                    }
+                    cacheUpdateHandler.handleUpdate(messageKey, message);
+                    updateOffset(record.offset());
+                } catch (Exception se) {
+                    log.error("Failed to add record from the Kafka topic"
+                        + topic
+                        + " the local cache");
+                }
             }
-            if (localCache != null) {
-                localCache.close();
-            }
-            super.awaitShutdown();
-            consumer.close();
-            log.info("KafkaStoreReaderThread shutdown complete.");
         }
-        */
 
-        public void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws CacheException {
+        private void updateOffset(long offset) {
+            try {
+                offsetUpdateLock.lock();
+                offsetInTopic = offset;
+                offsetReachedThreshold.signalAll();
+            } finally {
+                offsetUpdateLock.unlock();
+            }
+        }
+
+        private void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws CacheException {
             if (offset < 0) {
-                throw new CacheException("KafkaStoreReaderThread can't wait for a negative offset.");
+                throw new CacheException("KafkaTopicReader thread can't wait for a negative offset.");
             }
 
-            log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetInSchemasTopic);
+            log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetInTopic);
 
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
-                while ((offsetInSchemasTopic < offset) && (timeoutNs > 0)) {
+                while ((offsetInTopic < offset) && (timeoutNs > 0)) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
-                        log.debug("Interrupted while waiting for the background store reader thread to reach"
+                        log.debug("Interrupted while waiting for the background cache reader thread to reach"
                             + " the specified offset: " + offset, e);
                     }
                 }
@@ -703,19 +600,27 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 offsetUpdateLock.unlock();
             }
 
-            if (offsetInSchemasTopic < offset) {
+            if (offsetInTopic < offset) {
                 throw new CacheTimeoutException(
-                    "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
-                        + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
+                    "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
+                        + "targetOffset: " + offset + ", offsetReached: " + offsetInTopic
                         + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
             }
         }
 
-        /* for testing purposes */
-        /*
-        public String getConsumerProperty(String key) {
-            return this.consumerProps.getProperty(key);
+        @Override
+        public void shutdown() throws InterruptedException {
+            log.debug("Starting shutdown of KafkaTopicReader thread.");
+
+            super.initiateShutdown();
+            if (consumer != null) {
+                consumer.wakeup();
+            }
+            super.awaitShutdown();
+            if (consumer != null) {
+                consumer.close();
+            }
+            log.info("KafkaTopicReader thread shutdown complete.");
         }
-        */
     }
 }

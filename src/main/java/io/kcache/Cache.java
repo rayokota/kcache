@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Confluent Inc.
+/*
+ * Copyright 2014-2018 Confluent Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 package io.kcache;
+
+import io.kcache.exceptions.CacheInitializationException;
 
 import java.io.Closeable;
 import java.util.Map;

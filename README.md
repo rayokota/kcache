@@ -60,4 +60,4 @@ cache.init();
 
 ## Using KCache as a Distributed Cache
 
-KCache can be used as a distributed cache, with some caveats.  To ensure that updates are processed in the proper order, one instance of KCache should be designated as the sole writer, with all writes being forwarded to it.  If the writer fails, another instance can then be elected as the new writer.  The leader election is outside of KCache but can be implemented using ZooKeeper, for example.  Reads of course can be served by any instance of KCache.
+KCache can be used as a distributed cache, with some caveats.  To ensure that updates are processed in the proper order, one instance of KCache should be designated as the sole writer, with all writes being forwarded to it.  If the writer fails, another instance can then be elected as the new writer.  The leader election is outside of KCache but can be implemented using [ZooKeeper](https://zookeeper.apache.org/doc/current/recipes.html#sc_leaderElection), for example.  Reads of course can be served by any instance of KCache.

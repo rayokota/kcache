@@ -25,11 +25,11 @@ KafkaCache<String, String> cache = new KafkaCache<>(
     Serdes.String(),  // for serializing/deserializing keys
     Serdes.String()   // for serializing/deserializing values
 );
-cache.init();   // initializes the internal consumer and producer
+cache.init();   // creates topic, initializes cache, consumer, and producer
 cache.put("Kafka", "Rocks");
 String value = cache.get("Kafka");  // returns "Rocks"
 cache.remove("Kafka");
-cache.close();  // shuts down the internal consumer and producer
+cache.close();  // shuts down the cache, consumer, and producer
 ```
 
 ## Configuration
@@ -54,6 +54,6 @@ KafkaCache<String, String> cache = new KafkaCache<>(
     Serdes.String(),  // for serializing/deserializing keys
     Serdes.String()   // for serializing/deserializing values
 );
-cache.init();   // initializes the internal consumer and producer
+cache.init();
 ...
 ```

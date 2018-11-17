@@ -19,6 +19,8 @@ Releases of KCache are deployed to Maven Central.
 An instance of `KafkaCache` implements the `java.util.Map` interface.  Here is an example usage:
 
 ```java
+import io.kcache.KafkaCache;
+
 String bootstrapServers = "localhost:9092";
 KafkaCache<String, String> cache = new KafkaCache<>(
     bootstrapServers,

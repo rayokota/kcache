@@ -349,7 +349,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             log.trace("Waiting for the local cache to catch up to offset " + recordMetadata.offset());
             long lastWrittenOffset = recordMetadata.offset();
-            kafkaTopicReader.waitUntilOffset(lastWrittenOffset, timeout, TimeUnit.MILLISECONDS);
+            kafkaTopicReader.waitUntilOffset(lastWrittenOffset, Duration.ofMillis(timeout));
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
@@ -578,7 +578,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void waitUntilOffset(long offset, long timeout, TimeUnit timeUnit) throws CacheException {
+        private void waitUntilOffset(long offset, Duration timeout) throws CacheException {
             if (offset < 0) {
                 throw new CacheException("KafkaTopicReader thread can't wait for a negative offset.");
             }
@@ -587,7 +587,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             try {
                 offsetUpdateLock.lock();
-                long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
+                long timeoutNs = timeout.toNanos();
                 while ((offsetInTopic < offset) && (timeoutNs > 0)) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
@@ -604,7 +604,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw new CacheTimeoutException(
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
                         + "targetOffset: " + offset + ", offsetReached: " + offsetInTopic
-                        + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+                        + ", timeout(ms): " + timeout.toMillis());
             }
         }
 

@@ -416,7 +416,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         if (producer != null) {
             producer.close();
-            log.error("Kafka cache producer shut down");
+            log.debug("Kafka cache producer shut down");
         }
         localCache.close();
         log.debug("Kafka cache shut down complete");

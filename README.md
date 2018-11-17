@@ -45,7 +45,7 @@ KCache has a number of configuration properties that can be specified.
 
 Configuration properties can be passed as follows:
 
-```
+```java
 Properties props = new Properties();
 props.setProperty("kafkacache.bootstrap.servers", "localhost:9092");
 props.setProperty("kafkacache.topic", "_mycache");

@@ -1,6 +1,6 @@
 # KCache - An In-Memory Cache Backed by Kafka
 
-KCache is a client library that provides an in-memory cache backed by a compacted topic in Kafka.  It is one of the ways to use Kafka as a persistent store as described by Jay Kreps in [It's Okay to Store Data in Apache Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/).  
+KCache is a client library that provides an in-memory cache backed by a compacted topic in Kafka.  It is one of the patterns for using Kafka  as a persistent store in the article [It's Okay to Store Data in Apache Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/), by Jay Kreps.
 
 ## Installing
 

@@ -36,7 +36,7 @@ cache.close();  // shuts down the internal consumer and producer
 
 KCache has a number of configuration properties that can be specified.
 
-- `kafkacache.bootstrap.servers` - A list of host and port pairs to use for establishing the initial connection to the Kafka cluster.
+- `kafkacache.bootstrap.servers` - A list of host and port pairs to use for establishing the initial connection to Kafka.
 - `kafkacache.group.id` - The group ID to use for the internal consumer.  Defaults to `kafkacache`.
 - `kafkacache.topic` - The name of the compacted topic.  Defaults to `_cache`.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.

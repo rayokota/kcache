@@ -1,1 +1,1 @@
-# KCache - An in-memory cache backed by Apache Kafka
+# KCache - An In-Memory Cache Backed by Kafka

@@ -422,17 +422,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         log.debug("Kafka cache shut down complete");
     }
 
+    private void assertInitialized() throws CacheException {
+        if (!initialized.get()) {
+            throw new CacheException("Illegal state. Cache not initialized yet");
+        }
+    }
+
     /*
      * For testing.
      */
     WorkerThread getWorkerThread() {
         return this.kafkaTopicReader;
-    }
-
-    private void assertInitialized() throws CacheException {
-        if (!initialized.get()) {
-            throw new CacheException("Illegal state. Cache not initialized yet");
-        }
     }
 
     /**

@@ -563,7 +563,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         + "exceeds the default maximum fetch size.", rtle);
             } catch (RuntimeException e) {
                 log.error("KafkaTopicReader thread has died for an unknown reason.");
-                throw new RuntimeException(e);
+                throw e;
             }
         }
 

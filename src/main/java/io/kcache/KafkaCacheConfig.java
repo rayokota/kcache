@@ -27,8 +27,6 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class KafkaCacheConfig extends AbstractConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaCacheConfig.class);
-
     /**
      * <code>kafkacache.bootstrap.servers</code>
      */

@@ -35,7 +35,7 @@ import java.util.Properties;
 import java.util.Vector;
 
 /**
- * Test harness to run against a real, local Kafka cluster and REST proxy. This is essentially
+ * Test harness to run against a real, local Kafka cluster. This is essentially
  * Kafka's ZookeeperTestHarness and KafkaServerTestHarness traits combined.
  */
 public abstract class ClusterTestHarness {
@@ -77,13 +77,10 @@ public abstract class ClusterTestHarness {
             servers.add(server);
         }
 
-        // Initialize the rest app ourselves so we can ensure we don't pass any info about the Kafka
-        // zookeeper. The format for this config includes the security protocol scheme in the URLs so
-        // we can't use the pre-generated server list.
         String[] serverUrls = new String[servers.size()];
         ListenerName listenerType = ListenerName.forSecurityProtocol(getSecurityProtocol());
         for (int i = 0; i < servers.size(); i++) {
-            serverUrls[i] = getSecurityProtocol() + "://" +
+            serverUrls[i] =
                 Utils.formatAddress(
                     servers.get(i).config().advertisedListeners().head().host(),
                     servers.get(i).boundPort(listenerType)

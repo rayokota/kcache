@@ -512,8 +512,49 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         @Override
         protected void doWork() {
+            poll();
+        }
+
+        private void poll() {
             try {
-                poll();
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    K messageKey;
+                    try {
+                        messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                    } catch (Exception e) {
+                        log.error("Failed to deserialize the key", e);
+                        continue;
+                    }
+
+                    V message;
+                    try {
+                        message =
+                            record.value() == null ? null
+                                : valueSerde.deserializer().deserialize(topic, record.value());
+                    } catch (Exception e) {
+                        log.error("Failed to deserialize a value", e);
+                        continue;
+                    }
+                    try {
+                        log.trace("Applying update ("
+                            + messageKey
+                            + ","
+                            + message
+                            + ") to the local cache");
+                        if (message == null) {
+                            localCache.remove(messageKey);
+                        } else {
+                            localCache.put(messageKey, message);
+                        }
+                        cacheUpdateHandler.handleUpdate(messageKey, message);
+                        updateOffset(record.offset());
+                    } catch (Exception se) {
+                        log.error("Failed to add record from the Kafka topic"
+                            + topic
+                            + " to the local cache");
+                    }
+                }
             } catch (WakeupException we) {
                 // do nothing because the thread is closing -- see shutdown()
             } catch (RecordTooLargeException rtle) {
@@ -523,47 +564,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } catch (RuntimeException e) {
                 log.error("KafkaTopicReader thread has died for an unknown reason.");
                 throw new RuntimeException(e);
-            }
-        }
-
-        private void poll() {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                K messageKey;
-                try {
-                    messageKey = keySerde.deserializer().deserialize(topic, record.key());
-                } catch (Exception e) {
-                    log.error("Failed to deserialize the key", e);
-                    continue;
-                }
-
-                V message;
-                try {
-                    message =
-                        record.value() == null ? null
-                            : valueSerde.deserializer().deserialize(topic, record.value());
-                } catch (Exception e) {
-                    log.error("Failed to deserialize a value", e);
-                    continue;
-                }
-                try {
-                    log.trace("Applying update ("
-                        + messageKey
-                        + ","
-                        + message
-                        + ") to the local cache");
-                    if (message == null) {
-                        localCache.remove(messageKey);
-                    } else {
-                        localCache.put(messageKey, message);
-                    }
-                    cacheUpdateHandler.handleUpdate(messageKey, message);
-                    updateOffset(record.offset());
-                } catch (Exception se) {
-                    log.error("Failed to add record from the Kafka topic"
-                        + topic
-                        + " to the local cache");
-                }
             }
         }
 

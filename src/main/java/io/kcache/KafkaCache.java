@@ -409,9 +409,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (kafkaTopicReader != null) {
             try {
                 kafkaTopicReader.shutdown();
-                log.debug("Kafka store reader thread shut down");
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                // ignore
             }
         }
         if (producer != null) {
@@ -489,7 +488,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             log.info("Initialized last consumed offset to " + offsetInTopic);
 
-            log.debug("Kafka cache reader thread started");
+            log.debug("KafkaTopicReader thread started.");
         }
 
         private void readToEnd() {
@@ -563,7 +562,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 } catch (Exception se) {
                     log.error("Failed to add record from the Kafka topic"
                         + topic
-                        + " the local cache");
+                        + " to the local cache");
                 }
             }
         }

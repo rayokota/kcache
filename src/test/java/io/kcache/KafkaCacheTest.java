@@ -50,20 +50,20 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testInitialization() throws IOException {
-        KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
         kafkaCache.close();
     }
 
     @Test(expected = CacheInitializationException.class)
     public void testDoubleInitialization() throws Exception {
-        try (KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
             kafkaCache.init();
         }
     }
 
     @Test
     public void testSimplePut() throws Exception {
-        try (KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
             String key = "Kafka";
             String value = "Rocks";
             kafkaCache.put(key, value);
@@ -74,7 +74,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleGetAfterFailure() throws Exception {
-        KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
         String key = "Kafka";
         String value = "Rocks";
         String retrievedValue;
@@ -110,7 +110,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleDelete() throws Exception {
-        try (KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
             String key = "Kafka";
             String value = "Rocks";
             try {
@@ -142,7 +142,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testDeleteAfterRestart() throws Exception {
-        KafkaCache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
         String key = "Kafka";
         String value = "Rocks";
         try {
@@ -187,12 +187,12 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
     }
 
-    private static KafkaCache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        InMemoryCache<String, String> inMemoryCache = new InMemoryCache<>();
+    private static Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
+        Cache<String, String> inMemoryCache = new InMemoryCache<>();
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         KafkaCacheConfig config = new KafkaCacheConfig(props);
-        KafkaCache<String, String> kafkaCache =
+        Cache<String, String> kafkaCache =
             new KafkaCache<>(config,
                 Serdes.String(),
                 Serdes.String(),

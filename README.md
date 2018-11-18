@@ -19,10 +19,10 @@ Releases of KCache are deployed to Maven Central.
 An instance of `KafkaCache` implements the `java.util.Map` interface.  Here is an example usage:
 
 ```java
-import io.kcache.KafkaCache;
+import io.kcache.*;
 
 String bootstrapServers = "localhost:9092";
-KafkaCache<String, String> cache = new KafkaCache<>(
+Cache<String, String> cache = new KafkaCache<>(
     bootstrapServers,
     Serdes.String(),  // for serializing/deserializing keys
     Serdes.String()   // for serializing/deserializing values
@@ -51,7 +51,7 @@ Configuration properties can be passed as follows:
 Properties props = new Properties();
 props.setProperty("kafkacache.bootstrap.servers", "localhost:9092");
 props.setProperty("kafkacache.topic", "_mycache");
-KafkaCache<String, String> cache = new KafkaCache<>(
+Cache<String, String> cache = new KafkaCache<>(
     new KafkaCacheConfig(props),
     Serdes.String(),  // for serializing/deserializing keys
     Serdes.String()   // for serializing/deserializing values

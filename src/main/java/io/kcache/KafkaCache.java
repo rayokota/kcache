@@ -74,6 +74,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private String topic;
     private int desiredReplicationFactor;
     private String groupId;
+    private String clientId;
     private CacheUpdateHandler<K, V> cacheUpdateHandler;
     private Serde<K> keySerde;
     private Serde<V> valueSerde;
@@ -117,6 +118,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
         this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
         this.groupId = config.getString(KafkaCacheConfig.KAFKACACHE_GROUP_ID_CONFIG);
+        this.clientId = config.getString(KafkaCacheConfig.KAFKACACHE_CLIENT_ID_CONFIG);
+        if (this.clientId == null) {
+        	this.clientId = "kafka-cache-reader-" + this.topic;
+        }
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value) -> {
@@ -158,7 +163,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         Properties consumerProps = new Properties();
         addKafkaCacheConfigsToClientProperties(consumerProps);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "kafka-cache-reader-" + this.topic);
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
 
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

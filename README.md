@@ -10,7 +10,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
 </dependency>
 ```
 
@@ -40,6 +40,7 @@ KCache has a number of configuration properties that can be specified.
 
 - `kafkacache.bootstrap.servers` - A list of host and port pairs to use for establishing the initial connection to Kafka.
 - `kafkacache.group.id` - The group ID to use for the internal consumer.  Defaults to `kafkacache`.
+- `kafkacache.client.id` - The client ID to use for the internal consumer.  Defaults to `kafka-cache-reader-<topic>`.
 - `kafkacache.topic` - The name of the compacted topic.  Defaults to `_cache`.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 60 seconds.

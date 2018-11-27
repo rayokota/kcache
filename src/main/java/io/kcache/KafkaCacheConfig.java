@@ -37,6 +37,10 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static final String KAFKACACHE_GROUP_ID_CONFIG = "kafkacache.group.id";
     public static final String DEFAULT_KAFKACACHE_GROUP_ID = "kafkacache";
     /**
+     * <code>kafkacache.client.id</code>
+     */
+    public static final String KAFKACACHE_CLIENT_ID_CONFIG = "kafkacache.client.id";
+    /**
      * <code>kafkacache.topic</code>
      */
     public static final String KAFKACACHE_TOPIC_CONFIG = "kafkacache.topic";
@@ -59,6 +63,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`.";
     protected static final String KAFKACACHE_GROUP_ID_DOC =
         "Use this setting to override the group.id for the Kafka cache consumer.";
+    protected static final String KAFKACACHE_CLIENT_ID_DOC =
+            "Use this setting to override the client.id for the Kafka cache consumer.";
     protected static final String KAFKACACHE_TOPIC_DOC =
         "The durable single partition topic that acts as the durable log for the data.";
     protected static final String KAFKACACHE_TOPIC_REPLICATION_FACTOR_DOC =
@@ -97,6 +103,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
                 ConfigDef.Importance.LOW, KAFKACACHE_GROUP_ID_DOC
+            )
+            .define(KAFKACACHE_CLIENT_ID_CONFIG, ConfigDef.Type.STRING, null,
+                    ConfigDef.Importance.LOW, KAFKACACHE_CLIENT_ID_DOC
             );
     }
 

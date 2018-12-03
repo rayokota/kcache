@@ -187,7 +187,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
     }
 
-    private static Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
+    protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
         Cache<String, String> inMemoryCache = new InMemoryCache<>();
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);

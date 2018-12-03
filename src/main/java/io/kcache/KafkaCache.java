@@ -141,6 +141,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache. Cache was already initialized");
         }
+        localCache.init();
 
         createOrVerifyTopic();
         this.producer = createProducer();

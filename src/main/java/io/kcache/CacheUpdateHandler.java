@@ -19,7 +19,18 @@ package io.kcache;
 public interface CacheUpdateHandler<K, V> {
 
     /**
-     * Invoked on every new K,V pair written to the cache
+     * Invoked before every new K,V pair written to the cache
+     *
+     * @param key   key associated with the data
+     * @param value data written to the cache
+     * @return whether the update should proceed
+     */
+    default boolean validateUpdate(K key, V value) {
+        return true;
+    }
+
+    /**
+     * Invoked after every new K,V pair written to the cache
      *
      * @param key   key associated with the data
      * @param value data written to the cache

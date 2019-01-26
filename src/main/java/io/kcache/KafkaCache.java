@@ -543,17 +543,19 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         continue;
                     }
                     try {
-                        log.trace("Applying update ("
-                            + messageKey
-                            + ","
-                            + message
-                            + ") to the local cache");
-                        if (message == null) {
-                            localCache.remove(messageKey);
-                        } else {
-                            localCache.put(messageKey, message);
+                        if (cacheUpdateHandler.validateUpdate(messageKey, message)) {
+                            log.trace("Applying update ("
+                                + messageKey
+                                + ","
+                                + message
+                                + ") to the local cache");
+                            if (message == null) {
+                                localCache.remove(messageKey);
+                            } else {
+                                localCache.put(messageKey, message);
+                            }
+                            cacheUpdateHandler.handleUpdate(messageKey, message);
                         }
-                        cacheUpdateHandler.handleUpdate(messageKey, message);
                         updateOffset(record.offset());
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic"

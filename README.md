@@ -10,7 +10,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>0.0.4</version>
+    <version>0.0.5</version>
 </dependency>
 ```
 

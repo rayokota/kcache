@@ -35,12 +35,13 @@ public abstract class ShutdownableThread extends Thread {
     }
 
     public void shutdown() throws InterruptedException {
-        initiateShutdown();
-        awaitShutdown();
+        if (initiateShutdown()) {
+            awaitShutdown();
+        }
     }
 
-    protected void initiateShutdown() {
-        isRunning.set(false);
+    protected boolean initiateShutdown() {
+        return isRunning.getAndSet(false);
     }
 
     protected void awaitShutdown() throws InterruptedException {

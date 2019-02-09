@@ -555,6 +555,20 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 localCache.put(messageKey, message);
                             }
                             cacheUpdateHandler.handleUpdate(messageKey, message);
+                        } else {
+                            if (!localCache.containsKey(messageKey)) {
+                                try {
+                                    ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                                        topic,
+                                        0,
+                                        record.key(),
+                                        null
+                                    );
+                                    producer.send(producerRecord);
+                                } catch (KafkaException ke) {
+                                    log.warn("Failed to tombstone invalid update", ke);
+                                }
+                            }
                         }
                         updateOffset(record.offset());
                     } catch (Exception se) {

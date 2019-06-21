@@ -574,7 +574,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic"
                             + topic
-                            + " to the local cache");
+                            + " to the local cache", se);
                     }
                 }
             } catch (WakeupException we) {
@@ -584,7 +584,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     "Consumer threw RecordTooLargeException. Data has been written that "
                         + "exceeds the default maximum fetch size.", rtle);
             } catch (RuntimeException e) {
-                log.error("KafkaTopicReader thread has died for an unknown reason.");
+                log.error("KafkaTopicReader thread has died for an unknown reason.", e);
                 throw e;
             }
         }

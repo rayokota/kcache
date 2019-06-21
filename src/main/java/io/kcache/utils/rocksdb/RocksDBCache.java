@@ -160,8 +160,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         open = true;
     }
 
-    private void openRocksDB(final DBOptions dbOptions,
-                     final ColumnFamilyOptions columnFamilyOptions) {
+    private synchronized void openRocksDB(final DBOptions dbOptions,
+                                          final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors
             = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
@@ -231,7 +231,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void putAll(Map<? extends K, ? extends V> entries) {
+    public synchronized void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
         try (final WriteBatch batch = new WriteBatch()) {
             Map<Bytes, byte[]> rawEntries = entries.entrySet().stream()
@@ -337,7 +337,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
      *
      * @return an approximate count of key-value mappings in the store.
      */
-    private long approximateNumEntries() {
+    private synchronized long approximateNumEntries() {
         validateStoreOpen();
         final long numEntries;
         try {

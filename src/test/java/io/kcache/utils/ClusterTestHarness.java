@@ -63,7 +63,7 @@ public abstract class ClusterTestHarness {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         zookeeper = new EmbeddedZookeeper();
         zkConnect = String.format("localhost:%d", zookeeper.port());
 
@@ -127,7 +127,7 @@ public abstract class ClusterTestHarness {
     }
 
     @After
-    public void tearDown() {
+    public void tearDown() throws Exception {
         if (servers != null) {
             for (KafkaServer server : servers) {
                 server.shutdown();

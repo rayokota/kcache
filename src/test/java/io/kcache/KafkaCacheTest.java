@@ -19,9 +19,6 @@ package io.kcache;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
-import io.kcache.utils.InMemoryCache;
-import io.kcache.utils.StringUpdateHandler;
-import org.apache.kafka.common.serialization.Serdes;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,7 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -188,17 +184,6 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> inMemoryCache = new InMemoryCache<>();
-        Properties props = new Properties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        KafkaCacheConfig config = new KafkaCacheConfig(props);
-        Cache<String, String> kafkaCache =
-            new KafkaCache<>(config,
-                Serdes.String(),
-                Serdes.String(),
-                new StringUpdateHandler(),
-                inMemoryCache);
-        kafkaCache.init();
-        return kafkaCache;
+        return CacheUtils.createAndInitKafkaCacheInstance(bootstrapServers);
     }
 }

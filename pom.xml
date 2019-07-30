@@ -34,8 +34,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <kafka.version>2.2.0</kafka.version>
+        <kafka.version>2.3.0</kafka.version>
         <kafka.scala.version>2.12</kafka.scala.version>
+        <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
+        <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
+        <bouncycastle.version>1.60</bouncycastle.version>
     </properties>
 
     <dependencies>
@@ -80,6 +83,127 @@
             <artifactId>junit</artifactId>
             <version>4.12</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk15on</artifactId>
+            <version>${bouncycastle.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- To prevent a UniqueResourceException due the same resource existing in both
+             org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data, api-ldap-schema-data
+             needs to be excluded from all directory-related maven dependencies. -->
+        <dependency>
+            <groupId>org.apache.directory.api</groupId>
+            <artifactId>api-all</artifactId>
+            <version>${apache.directory.api.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>xml-apis</groupId>
+                    <artifactId>xml-apis</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-core-api</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-interceptor-kerberos</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-protocol-shared</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-protocol-kerberos</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-protocol-ldap</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-ldif-partition</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-mavibot-partition</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.directory.server</groupId>
+            <artifactId>apacheds-jdbm-partition</artifactId>
+            <version>${apache.directory.server.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.directory.api</groupId>
+                    <artifactId>api-ldap-schema-data</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 

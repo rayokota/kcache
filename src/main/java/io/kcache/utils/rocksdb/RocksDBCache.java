@@ -276,28 +276,25 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     @Override
     public Set<K> keySet() {
         return StreamUtils.streamOf(all())
-            .map(kv -> keySerde.deserializer().deserialize(null, kv.key.get()))
+            .map(kv -> kv.key)
             .collect(Collectors.toSet());
     }
 
     @Override
     public Collection<V> values() {
         return StreamUtils.streamOf(all())
-            .map(kv -> valueSerde.deserializer().deserialize(null, kv.value))
+            .map(kv -> kv.value)
             .collect(Collectors.toList());
     }
 
     @Override
     public Set<Map.Entry<K, V>> entrySet() {
         return StreamUtils.streamOf(all())
-            .map(kv -> new AbstractMap.SimpleEntry<>(
-                keySerde.deserializer().deserialize(null, kv.key.get()),
-                valueSerde.deserializer().deserialize(null, kv.value)
-            ))
+            .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
             .collect(Collectors.toSet());
     }
 
-    private synchronized KeyValueIterator<Bytes, byte[]> range(final K from, final K to) {
+    public synchronized KeyValueIterator<K, V> range(final K from, final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -316,14 +313,14 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(fromBytes, toBytes);
         openIterators.add(rocksDBRangeIterator);
 
-        return rocksDBRangeIterator;
+        return new TransformedKeyValueIterator(rocksDBRangeIterator);
     }
 
-    private synchronized KeyValueIterator<Bytes, byte[]> all() {
+    public synchronized KeyValueIterator<K, V> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all();
-        openIterators.add(rocksDbIterator);
-        return rocksDbIterator;
+        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.all();
+        openIterators.add(rocksDBIterator);
+        return new TransformedKeyValueIterator(rocksDBIterator);
     }
 
     /**
@@ -520,6 +517,39 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         @Override
         public void close() {
             columnFamily.close();
+        }
+    }
+
+    class TransformedKeyValueIterator implements KeyValueIterator<K, V> {
+        final KeyValueIterator<Bytes, byte[]> backingIterator;
+
+        TransformedKeyValueIterator(KeyValueIterator<Bytes, byte[]> backingIterator) {
+            this.backingIterator = backingIterator;
+        }
+
+        public final boolean hasNext() {
+            return this.backingIterator.hasNext();
+        }
+
+        public final KeyValue<K, V> next() {
+            KeyValue<Bytes, byte[]> keyValue = this.backingIterator.next();
+            return new KeyValue<K, V>(
+                keySerde.deserializer().deserialize(null, keyValue.key.get()),
+                valueSerde.deserializer().deserialize(null, keyValue.value)
+            );
+        }
+
+        public final K peekNextKey() {
+            Bytes key = this.backingIterator.peekNextKey();
+            return keySerde.deserializer().deserialize(null, key.get());
+        }
+
+        public final void remove() {
+            this.backingIterator.remove();
+        }
+
+        public final void close() {
+            this.backingIterator.close();
         }
     }
 }

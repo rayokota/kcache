@@ -14,28 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
 
-import java.io.Closeable;
-import java.util.Iterator;
+package io.kcache;
 
-/**
- * Iterator interface of {@link KeyValue}.
- *
- * Users must call its {@code close} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
- *
- * @param <K> Type of keys
- * @param <V> Type of values
- */
-public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
+import java.util.NoSuchElementException;
 
-    @Override
-    void close();
+public class KeyValueIterators {
 
-    /**
-     * Peek at the next key without advancing the iterator
-     * @return the key of the next value that would be returned from the next call to next
-     */
-    K peekNextKey();
+    private static class EmptyKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static final KeyValueIterator EMPTY_ITERATOR = new EmptyKeyValueIterator();
+
+    @SuppressWarnings("unchecked")
+    public static <K, V> KeyValueIterator<K, V> emptyIterator() {
+        return (KeyValueIterator<K, V>) EMPTY_ITERATOR;
+    }
 }

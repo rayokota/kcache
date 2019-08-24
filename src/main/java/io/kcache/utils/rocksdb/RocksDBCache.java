@@ -17,6 +17,9 @@
 package io.kcache.utils.rocksdb;
 
 import io.kcache.Cache;
+import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
+import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.StreamUtils;
@@ -294,6 +297,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
             .collect(Collectors.toSet());
     }
 
+    @Override
     public synchronized KeyValueIterator<K, V> range(final K from, final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
@@ -316,6 +320,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         return new TransformedKeyValueIterator(rocksDBRangeIterator);
     }
 
+    @Override
     public synchronized KeyValueIterator<K, V> all() {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.all();
@@ -537,11 +542,6 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 keySerde.deserializer().deserialize(null, keyValue.key.get()),
                 valueSerde.deserializer().deserialize(null, keyValue.value)
             );
-        }
-
-        public final K peekNextKey() {
-            Bytes key = this.backingIterator.peekNextKey();
-            return keySerde.deserializer().deserialize(null, key.get());
         }
 
         public final void remove() {

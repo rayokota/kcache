@@ -411,6 +411,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        assertInitialized();
+        return localCache.range(from, to);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> all() {
+        assertInitialized();
+        return localCache.all();
+    }
+
+    @Override
     public void close() throws IOException {
         if (kafkaTopicReader != null) {
             try {

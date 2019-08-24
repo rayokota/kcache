@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
+package io.kcache;
 
 import java.util.Objects;
 
 /**
- * A key-value pair defined for a single Kafka Streams record.
- * If the record comes directly from a Kafka topic then its key/value are defined as the message key/value.
+ * A key-value pair.
  *
  * @param <K> Key type
  * @param <V> Value type
@@ -41,19 +40,6 @@ public class KeyValue<K, V> {
     public KeyValue(final K key, final V value) {
         this.key = key;
         this.value = value;
-    }
-
-    /**
-     * Create a new key-value pair.
-     *
-     * @param key   the key
-     * @param value the value
-     * @param <K>   the type of the key
-     * @param <V>   the type of the value
-     * @return a new key-value pair
-     */
-    public static <K, V> KeyValue<K, V> pair(final K key, final V value) {
-        return new KeyValue<>(key, value);
     }
 
     @Override

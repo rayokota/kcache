@@ -24,4 +24,8 @@ import java.util.Map;
 public interface Cache<K, V> extends Map<K, V>, Closeable {
 
     void init() throws CacheInitializationException;
+
+    KeyValueIterator<K, V> range(final K from, final K to);
+
+    KeyValueIterator<K, V> all();
 }

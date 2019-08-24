@@ -17,7 +17,11 @@
 package io.kcache.utils;
 
 import io.kcache.Cache;
+import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
@@ -31,7 +35,41 @@ public class InMemoryCache<K, V> extends ConcurrentSkipListMap<K, V> implements 
     }
 
     @Override
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        return new InMemoryKeyValueIterator<>(subMap(from, true, to, true).entrySet().iterator());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> all() {
+        return new InMemoryKeyValueIterator<>(entrySet().iterator());
+    }
+
+    @Override
     public void close() {
         // do nothing
+    }
+
+    private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+        private final Iterator<Map.Entry<K, V>> iter;
+
+        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
+            this.iter = iter;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            final Map.Entry<K, V> entry = iter.next();
+            return new KeyValue<>(entry.getKey(), entry.getValue());
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
     }
 }

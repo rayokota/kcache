@@ -16,12 +16,13 @@
  */
 package io.kcache.utils.rocksdb;
 
+import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheException;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.RocksIterator;
 
-import java.util.NoSuchElementException;
 import java.util.Set;
 
 class RocksDBIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
@@ -75,13 +76,5 @@ class RocksDBIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
         openIterators.remove(this);
         iter.close();
         open = false;
-    }
-
-    @Override
-    public Bytes peekNextKey() {
-        if (!hasNext()) {
-            throw new NoSuchElementException();
-        }
-        return next.key;
     }
 }

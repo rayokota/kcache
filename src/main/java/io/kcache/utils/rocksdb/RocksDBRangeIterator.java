@@ -16,6 +16,8 @@
  */
 package io.kcache.utils.rocksdb;
 
+import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.RocksIterator;
 

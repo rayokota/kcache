@@ -17,7 +17,6 @@
 package io.kcache.utils.rocksdb;
 
 import io.kcache.Cache;
-import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;

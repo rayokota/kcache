@@ -69,7 +69,7 @@ public class KeyValueIterators {
 
         public final KeyValue<K, V> next() {
             KeyValue<Bytes, byte[]> keyValue = this.rawIterator.next();
-            return new KeyValue<K, V>(
+            return new KeyValue<>(
                 keySerde.deserializer().deserialize(null, keyValue.key.get()),
                 valueSerde.deserializer().deserialize(null, keyValue.value)
             );

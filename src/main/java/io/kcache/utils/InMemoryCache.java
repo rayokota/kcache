@@ -20,6 +20,7 @@ import io.kcache.Cache;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -28,6 +29,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * In-memory cache
  */
 public class InMemoryCache<K, V> extends ConcurrentSkipListMap<K, V> implements Cache<K, V> {
+
+    public InMemoryCache() {
+        super();
+    }
+
+    public InMemoryCache(Comparator<? super K> comparator) {
+        super(comparator);
+    }
 
     @Override
     public void init() {

@@ -5,7 +5,6 @@ import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Iterator;

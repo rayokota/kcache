@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import io.kcache.utils.Caches;
 import io.kcache.utils.StringUpdateHandler;
 import io.kcache.utils.rocksdb.RocksDBCache;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,12 +35,12 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         KafkaCacheConfig config = new KafkaCacheConfig(props);
-        Cache<String, String> kafkaCache =
+        Cache<String, String> kafkaCache = Caches.concurrentCache(
             new KafkaCache<>(config,
                 Serdes.String(),
                 Serdes.String(),
                 new StringUpdateHandler(),
-                rocksDBCache);
+                rocksDBCache));
         kafkaCache.init();
         return kafkaCache;
     }

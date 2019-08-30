@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import io.kcache.utils.Caches;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.StringUpdateHandler;
 import org.apache.kafka.common.serialization.Serdes;
@@ -46,12 +47,12 @@ public class KafkaDelegatingCacheTest extends KafkaCacheTest {
         props2.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props2.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, "_cache2");
         KafkaCacheConfig config2 = new KafkaCacheConfig(props2);
-        Cache<String, String> kafkaDelegatingCache =
+        Cache<String, String> kafkaDelegatingCache = Caches.concurrentCache(
             new KafkaCache<>(config2,
                 Serdes.String(),
                 Serdes.String(),
                 new StringUpdateHandler(),
-                kafkaCache);
+                kafkaCache));
         kafkaDelegatingCache.init();
         return kafkaDelegatingCache;
     }

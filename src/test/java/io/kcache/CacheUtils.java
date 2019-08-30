@@ -15,6 +15,7 @@
 package io.kcache;
 
 import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.utils.Caches;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.StringUpdateHandler;
 import org.apache.kafka.common.config.SslConfigs;
@@ -85,12 +86,12 @@ public class CacheUtils {
         throws CacheInitializationException {
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         KafkaCacheConfig config = new KafkaCacheConfig(props);
-        Cache<String, String> kafkaCache =
+        Cache<String, String> kafkaCache = Caches.concurrentCache(
             new KafkaCache<>(config,
                 Serdes.String(),
                 Serdes.String(),
                 new StringUpdateHandler(),
-                inMemoryCache);
+                inMemoryCache));
         kafkaCache.init();
         return kafkaCache;
     }

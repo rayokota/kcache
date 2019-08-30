@@ -66,37 +66,39 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean containsKey(Object key) {
-        return get(key) != null;
+        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        return rawCache.containsKey(new Bytes(keyBytes));
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean containsValue(Object value) {
-        throw new UnsupportedOperationException();
+        byte[] valueBytes = valueSerde.serializer().serialize(null, (V) value);
+        return rawCache.containsValue(valueBytes);
     }
 
     @Override
-    public synchronized V put(final K key, final V value) {
+    public V put(final K key, final V value) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V originalValue = get(key);
         byte[] keyBytes = keySerde.serializer().serialize(null, key);
         byte[] valueBytes = valueSerde.serializer().serialize(null, value);
-        rawCache.put(new Bytes(keyBytes), valueBytes);
-        return originalValue;
+        byte[] originalValueBytes = rawCache.put(new Bytes(keyBytes), valueBytes);
+        return valueSerde.deserializer().deserialize(null, originalValueBytes);
     }
 
     @Override
-    public synchronized V putIfAbsent(final K key, final V value) {
+    public V putIfAbsent(final K key, final V value) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V originalValue = get(key);
-        if (originalValue == null) {
-            put(key, value);
-        }
-        return originalValue;
+        byte[] keyBytes = keySerde.serializer().serialize(null, key);
+        byte[] valueBytes = valueSerde.serializer().serialize(null, value);
+        byte[] originalValueBytes = rawCache.putIfAbsent(new Bytes(keyBytes), valueBytes);
+        return valueSerde.deserializer().deserialize(null, originalValueBytes);
     }
 
     @Override
-    public synchronized void putAll(Map<? extends K, ? extends V> entries) {
+    public void putAll(Map<? extends K, ? extends V> entries) {
         Map<Bytes, byte[]> rawEntries = entries.entrySet().stream()
             .collect(Collectors.toMap(
                 e -> new Bytes(keySerde.serializer().serialize(null, e.getKey())),
@@ -106,7 +108,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public synchronized V get(final Object key) {
+    public V get(final Object key) {
         byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
         byte[] valueBytes = rawCache.get(new Bytes(keyBytes));
         return valueSerde.deserializer().deserialize(null, valueBytes);
@@ -114,41 +116,41 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public synchronized V remove(final Object key) {
+    public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V originalValue = get(key);
-        put((K) key, null);
-        return originalValue;
+        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] valueBytes = rawCache.remove(new Bytes(keyBytes));
+        return valueSerde.deserializer().deserialize(null, valueBytes);
     }
 
     @Override
     public void clear() {
-        throw new UnsupportedOperationException();
+        rawCache.clear();
     }
 
     @Override
     public Set<K> keySet() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> kv.key)
             .collect(Collectors.toSet());
     }
 
     @Override
     public Collection<V> values() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> kv.value)
             .collect(Collectors.toList());
     }
 
     @Override
     public Set<Entry<K, V>> entrySet() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
             .collect(Collectors.toSet());
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -162,18 +164,18 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
             return KeyValueIterators.emptyIterator();
         }
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = rawCache.range(fromBytes, toBytes);
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBRangeIterator);
+        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.range(fromBytes, toBytes);
+        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rawIterator);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> all() {
-        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = rawCache.all();
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
+    public KeyValueIterator<K, V> all() {
+        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.all();
+        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rawIterator);
     }
 
     @Override
-    public synchronized void close() throws IOException {
+    public void close() throws IOException {
         rawCache.close();
     }
 }

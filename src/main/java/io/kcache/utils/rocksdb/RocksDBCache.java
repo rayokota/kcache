@@ -21,7 +21,7 @@ import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
-import io.kcache.utils.StreamUtils;
+import io.kcache.utils.Streams;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.BlockBasedTableConfig;
@@ -162,8 +162,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         open = true;
     }
 
-    private synchronized void openRocksDB(final DBOptions dbOptions,
-                                          final ColumnFamilyOptions columnFamilyOptions) {
+    private void openRocksDB(final DBOptions dbOptions,
+                             final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors
             = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
@@ -177,7 +177,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void init() {
+    public synchronized void init() {
         // open the DB dir
         openDB();
     }
@@ -212,7 +212,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public synchronized V put(final K key, final V value) {
+    public V put(final K key, final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final V originalValue = get(key);
@@ -223,7 +223,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public synchronized V putIfAbsent(final K key, final V value) {
+    public V putIfAbsent(final K key, final V value) {
+        // Threads accessing this method should use external synchronization
+        // See https://github.com/facebook/rocksdb/issues/433
         Objects.requireNonNull(key, "key cannot be null");
         final V originalValue = get(key);
         if (originalValue == null) {
@@ -233,7 +235,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public synchronized void putAll(Map<? extends K, ? extends V> entries) {
+    public void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
         try (final WriteBatch batch = new WriteBatch()) {
             Map<Bytes, byte[]> rawEntries = entries.entrySet().stream()
@@ -249,7 +251,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public synchronized V get(final Object key) {
+    public V get(final Object key) {
         validateStoreOpen();
         try {
             byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
@@ -263,11 +265,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public synchronized V remove(final Object key) {
+    public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V originalValue = get(key);
-        put((K) key, null);
-        return originalValue;
+        return put((K) key, null);
     }
 
     @Override
@@ -277,27 +277,27 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public Set<K> keySet() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> kv.key)
             .collect(Collectors.toSet());
     }
 
     @Override
     public Collection<V> values() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> kv.value)
             .collect(Collectors.toList());
     }
 
     @Override
     public Set<Map.Entry<K, V>> entrySet() {
-        return StreamUtils.streamOf(all())
+        return Streams.streamOf(all())
             .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
             .collect(Collectors.toSet());
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -313,14 +313,14 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(fromBytes, toBytes);
-        openIterators.add(rocksDBRangeIterator);
+        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.range(fromBytes, toBytes);
+        openIterators.add(rocksDBIterator);
 
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBRangeIterator);
+        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> all() {
+    public KeyValueIterator<K, V> all() {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.all();
         openIterators.add(rocksDBIterator);
@@ -338,7 +338,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
      *
      * @return an approximate count of key-value mappings in the store.
      */
-    private synchronized long approximateNumEntries() {
+    private long approximateNumEntries() {
         validateStoreOpen();
         final long numEntries;
         try {
@@ -358,7 +358,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         return value < 0;
     }
 
-    public synchronized void flush() {
+    public void flush() {
         if (db == null) {
             return;
         }
@@ -400,10 +400,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     private void closeOpenIterators() {
-        final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
-        synchronized (openIterators) {
-            iterators = new HashSet<>(openIterators);
-        }
+        final HashSet<KeyValueIterator<Bytes, byte[]>> iterators = new HashSet<>(openIterators);
         if (iterators.size() != 0) {
             log.warn("Closing {} open iterators for store {}", iterators.size(), name);
             for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {

@@ -6,9 +6,9 @@ import java.util.Spliterators;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-public final class StreamUtils {
+public final class Streams {
 
-    private StreamUtils() {
+    private Streams() {
     }
 
     public static <E> Stream<E> streamOf(Iterable<E> iterable) {

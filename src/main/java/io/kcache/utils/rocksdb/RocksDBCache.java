@@ -755,8 +755,6 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         public KeyValueIterator<K, V> range(K fromKey, boolean fromInclusive,
                                             K toKey, boolean toInclusive) {
-            if (fromKey == null || toKey == null)
-                throw new NullPointerException();
             Comparator<? super K> cmp = m.comparator;
             if (isDescending) { // flip senses
                 K tk = fromKey;

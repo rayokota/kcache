@@ -60,12 +60,22 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
 
     @Override
     public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        return new InMemoryCache<>(delegate.subMap(from, fromInclusive, to, toInclusive));
+        return new InMemoryCache<>(subMap(from, fromInclusive, to, toInclusive));
+    }
+
+    private NavigableMap<K, V> subMap(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        if (from == null) {
+            return delegate.headMap(to, toInclusive);
+        } else if (to == null) {
+            return delegate.tailMap(from, fromInclusive);
+        } else {
+            return delegate.subMap(from, fromInclusive, to, toInclusive);
+        }
     }
 
     @Override
     public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        return new InMemoryKeyValueIterator<>(delegate.subMap(from, fromInclusive, to, toInclusive).entrySet().iterator());
+        return new InMemoryKeyValueIterator<>(subMap(from, fromInclusive, to, toInclusive).entrySet().iterator());
     }
 
     @Override

@@ -724,8 +724,6 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         public SubCache<K,V> subCache(K fromKey, boolean fromInclusive,
                                       K toKey, boolean toInclusive) {
-            if (fromKey == null || toKey == null)
-                throw new NullPointerException();
             return newSubCache(fromKey, fromInclusive, toKey, toInclusive);
         }
 

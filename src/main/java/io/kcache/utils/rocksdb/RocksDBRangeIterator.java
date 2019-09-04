@@ -29,29 +29,49 @@ class RocksDBRangeIterator extends RocksDBIterator {
     // comparator to be pluggable, and the default is lexicographic, so it's
     // safe to just force lexicographic comparator here for now.
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+    private final byte[] rawFromKey;
+    private final boolean fromInclusive;
     private final byte[] rawToKey;
+    private final boolean toInclusive;
+    private boolean checkAndSkipFrom;
 
-    RocksDBRangeIterator(final String storeName,
-                         final RocksIterator iter,
-                         final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
-                         final Bytes from,
-                         final Bytes to) {
+    RocksDBRangeIterator(String storeName,
+                         RocksIterator iter,
+                         Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                         Bytes from,
+                         boolean fromInclusive,
+                         Bytes to,
+                         boolean toInclusive) {
         super(storeName, iter, openIterators);
-        iter.seek(from.get());
-        rawToKey = to.get();
+        this.rawFromKey = from.get();
+        iter.seek(rawFromKey);
+        this.fromInclusive = fromInclusive;
+        if (fromInclusive) {
+            checkAndSkipFrom = true;
+        }
+
+        this.rawToKey = to.get();
         if (rawToKey == null) {
             throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
         }
+        this.toInclusive = toInclusive;
     }
 
     @Override
     public KeyValue<Bytes, byte[]> makeNext() {
-        final KeyValue<Bytes, byte[]> next = super.makeNext();
+        KeyValue<Bytes, byte[]> next = super.makeNext();
+        if (checkAndSkipFrom) {
+            if (next != null && comparator.compare(next.key.get(), rawFromKey) == 0) {
+                next = super.makeNext();
+            }
+            checkAndSkipFrom = false;
+        }
 
         if (next == null) {
             return allDone();
         } else {
-            if (comparator.compare(next.key.get(), rawToKey) <= 0) {
+            int cmp = comparator.compare(next.key.get(), rawToKey);
+            if (cmp < 0 || (cmp == 0 && toInclusive)) {
                 return next;
             } else {
                 return allDone();

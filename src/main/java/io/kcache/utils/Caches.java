@@ -110,8 +110,12 @@ public class Caches {
             throw new UnsupportedOperationException();
         }
 
-        public KeyValueIterator<K, V> range(final K from, final K to) {
-            return m.range(from, to); // Must be manually synched by user!
+        public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
+            return m.subCache(from, fromInclusive, to, toInclusive);
+        }
+
+        public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
+            return m.range(from, fromInclusive, to, toInclusive); // Must be manually synched by user!
         }
 
         public KeyValueIterator<K, V> all() {

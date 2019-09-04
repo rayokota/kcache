@@ -50,6 +50,7 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     private final String rootDir;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
+    final Comparator<K> comparator;
     private final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     private File dbDir;
@@ -103,11 +105,21 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                         final String rootDir,
                         Serde<K> keySerde,
                         Serde<V> valueSerde) {
+        this(name, parentDir, rootDir, keySerde, valueSerde, null);
+    }
+
+    public RocksDBCache(final String name,
+                        final String parentDir,
+                        final String rootDir,
+                        Serde<K> keySerde,
+                        Serde<V> valueSerde,
+                        Comparator<K> comparator) {
         this.name = name;
         this.parentDir = parentDir;
         this.rootDir = rootDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+        this.comparator = comparator;
     }
 
     private void openDB() {
@@ -297,7 +309,15 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        if (from == null || to == null) {
+            throw new NullPointerException();
+        }
+        return new SubCache<>(this, from, fromInclusive, to, toInclusive, false);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -313,7 +333,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.range(fromBytes, toBytes);
+        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive);
         openIterators.add(rocksDBIterator);
 
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
@@ -419,8 +439,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         byte[] get(final byte[] key) throws RocksDBException;
 
-        KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                              final Bytes to);
+        KeyValueIterator<Bytes, byte[]> range(Bytes from, boolean fromInclusive, Bytes to, boolean toInclusive);
 
         KeyValueIterator<Bytes, byte[]> all();
 
@@ -477,14 +496,15 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                     final Bytes to) {
+        public KeyValueIterator<Bytes, byte[]> range(Bytes from, boolean fromInclusive, Bytes to, boolean toInclusive) {
             return new RocksDBRangeIterator(
                 name,
                 db.newIterator(columnFamily),
                 openIterators,
                 from,
-                to);
+                fromInclusive,
+                to,
+                toInclusive);
         }
 
         @Override
@@ -518,6 +538,257 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         @Override
         public void close() {
             columnFamily.close();
+        }
+    }
+
+    /**
+     * Compares using comparator or natural ordering if null.
+     * Called only by methods that have performed required type checks.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static int cpr(Comparator c, Object x, Object y) {
+        return (c != null) ? c.compare(x, y) : ((Comparable)x).compareTo(y);
+    }
+
+    static final class SubCache<K,V> implements Cache<K,V> {
+
+        /** Underlying cache */
+        private final RocksDBCache<K,V> m;
+        /** lower bound key, or null if from start */
+        private final K lo;
+        /** upper bound key, or null if to end */
+        private final K hi;
+        /** inclusion flag for lo */
+        private final boolean loInclusive;
+        /** inclusion flag for hi */
+        private final boolean hiInclusive;
+        /** direction */
+        private final boolean isDescending;
+
+        /**
+         * Creates a new submap, initializing all fields.
+         */
+        SubCache(RocksDBCache<K,V> map,
+                 K fromKey, boolean fromInclusive,
+                 K toKey, boolean toInclusive,
+                 boolean isDescending) {
+            Comparator<? super K> cmp = map.comparator;
+            if (fromKey != null && toKey != null &&
+                cpr(cmp, fromKey, toKey) > 0)
+                throw new IllegalArgumentException("inconsistent range");
+            this.m = map;
+            this.lo = fromKey;
+            this.hi = toKey;
+            this.loInclusive = fromInclusive;
+            this.hiInclusive = toInclusive;
+            this.isDescending = isDescending;
+        }
+
+        public void init() {
+        }
+
+        public void close() {
+        }
+
+        /* ----------------  Utilities -------------- */
+
+        boolean tooLow(Object key, Comparator<? super K> cmp) {
+            int c;
+            return (lo != null && ((c = cpr(cmp, key, lo)) < 0 ||
+                (c == 0 && !loInclusive)));
+        }
+
+        boolean tooHigh(Object key, Comparator<? super K> cmp) {
+            int c;
+            return (hi != null && ((c = cpr(cmp, key, hi)) > 0 ||
+                (c == 0 && !hiInclusive)));
+        }
+
+        boolean inBounds(Object key, Comparator<? super K> cmp) {
+            return !tooLow(key, cmp) && !tooHigh(key, cmp);
+        }
+
+        void checkKeyBounds(K key, Comparator<? super K> cmp) {
+            if (key == null)
+                throw new NullPointerException();
+            if (!inBounds(key, cmp))
+                throw new IllegalArgumentException("key out of range");
+        }
+
+        /* ----------------  Map API methods -------------- */
+
+        public boolean containsKey(Object key) {
+            if (key == null) throw new NullPointerException();
+            return inBounds(key, m.comparator) && m.containsKey(key);
+        }
+
+        public V get(Object key) {
+            if (key == null) throw new NullPointerException();
+            return (!inBounds(key, m.comparator)) ? null : m.get(key);
+        }
+
+        public V put(K key, V value) {
+            checkKeyBounds(key, m.comparator);
+            return m.put(key, value);
+        }
+
+        public void putAll(Map<? extends K, ? extends V> entries) {
+            for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
+                put(e.getKey(), e.getValue());
+            }
+        }
+
+        public V remove(Object key) {
+            return (!inBounds(key, m.comparator)) ? null : m.remove(key);
+        }
+
+        public int size() {
+            return entrySet().size();
+        }
+
+        public boolean isEmpty() {
+            return entrySet().isEmpty();
+        }
+
+        public boolean containsValue(Object value) {
+            throw new UnsupportedOperationException();
+        }
+
+        public void clear() {
+            throw new UnsupportedOperationException();
+        }
+
+        /* ----------------  ConcurrentMap API methods -------------- */
+
+        public V putIfAbsent(K key, V value) {
+            checkKeyBounds(key, m.comparator);
+            return m.putIfAbsent(key, value);
+        }
+
+        public boolean remove(Object key, Object value) {
+            return inBounds(key, m.comparator) && m.remove(key, value);
+        }
+
+        public boolean replace(K key, V oldValue, V newValue) {
+            checkKeyBounds(key, m.comparator);
+            return m.replace(key, oldValue, newValue);
+        }
+
+        public V replace(K key, V value) {
+            checkKeyBounds(key, m.comparator);
+            return m.replace(key, value);
+        }
+
+        /* ----------------  SortedMap API methods -------------- */
+
+        /**
+         * Utility to create submaps, where given bounds override
+         * unbounded(null) ones and/or are checked against bounded ones.
+         */
+        SubCache<K,V> newSubCache(K fromKey, boolean fromInclusive,
+                                  K toKey, boolean toInclusive) {
+            Comparator<? super K> cmp = m.comparator;
+            if (isDescending) { // flip senses
+                K tk = fromKey;
+                fromKey = toKey;
+                toKey = tk;
+                boolean ti = fromInclusive;
+                fromInclusive = toInclusive;
+                toInclusive = ti;
+            }
+            if (lo != null) {
+                if (fromKey == null) {
+                    fromKey = lo;
+                    fromInclusive = loInclusive;
+                }
+                else {
+                    int c = cpr(cmp, fromKey, lo);
+                    if (c < 0 || (c == 0 && !loInclusive && fromInclusive))
+                        throw new IllegalArgumentException("key out of range");
+                }
+            }
+            if (hi != null) {
+                if (toKey == null) {
+                    toKey = hi;
+                    toInclusive = hiInclusive;
+                }
+                else {
+                    int c = cpr(cmp, toKey, hi);
+                    if (c > 0 || (c == 0 && !hiInclusive && toInclusive))
+                        throw new IllegalArgumentException("key out of range");
+                }
+            }
+            return new SubCache<>(m, fromKey, fromInclusive,
+                toKey, toInclusive, isDescending);
+        }
+
+        public SubCache<K,V> subCache(K fromKey, boolean fromInclusive,
+                                      K toKey, boolean toInclusive) {
+            if (fromKey == null || toKey == null)
+                throw new NullPointerException();
+            return newSubCache(fromKey, fromInclusive, toKey, toInclusive);
+        }
+
+        /* ---------------- Submap Views -------------- */
+
+        public Set<K> keySet() {
+            return Streams.streamOf(all())
+                .map(kv -> kv.key)
+                .collect(Collectors.toSet());
+        }
+
+        public Collection<V> values() {
+            return Streams.streamOf(all())
+                .map(kv -> kv.value)
+                .collect(Collectors.toList());
+        }
+
+        public Set<Map.Entry<K,V>> entrySet() {
+            return Streams.streamOf(all())
+                .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
+                .collect(Collectors.toSet());
+        }
+
+        public KeyValueIterator<K, V> all() {
+            return m.range(lo, loInclusive, hi, hiInclusive);
+        }
+
+        public KeyValueIterator<K, V> range(K fromKey, boolean fromInclusive,
+                                            K toKey, boolean toInclusive) {
+            if (fromKey == null || toKey == null)
+                throw new NullPointerException();
+            Comparator<? super K> cmp = m.comparator;
+            if (isDescending) { // flip senses
+                K tk = fromKey;
+                fromKey = toKey;
+                toKey = tk;
+                boolean ti = fromInclusive;
+                fromInclusive = toInclusive;
+                toInclusive = ti;
+            }
+            if (lo != null) {
+                if (fromKey == null) {
+                    fromKey = lo;
+                    fromInclusive = loInclusive;
+                }
+                else {
+                    int c = cpr(cmp, fromKey, lo);
+                    if (c < 0 || (c == 0 && !loInclusive && fromInclusive))
+                        throw new IllegalArgumentException("key out of range");
+                }
+            }
+            if (hi != null) {
+                if (toKey == null) {
+                    toKey = hi;
+                    toInclusive = hiInclusive;
+                }
+                else {
+                    int c = cpr(cmp, toKey, hi);
+                    if (c > 0 || (c == 0 && !hiInclusive && toInclusive))
+                        throw new IllegalArgumentException("key out of range");
+                }
+            }
+            return m.range(fromKey, fromInclusive, toKey, toInclusive);
         }
     }
 }

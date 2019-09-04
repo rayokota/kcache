@@ -411,9 +411,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
         assertInitialized();
-        return localCache.range(from, to);
+        return localCache.subCache(from, fromInclusive, to, toInclusive);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        assertInitialized();
+        return localCache.range(from, fromInclusive, to, toInclusive);
     }
 
     @Override

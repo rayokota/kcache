@@ -17,12 +17,10 @@
 package io.kcache.utils;
 
 import com.google.common.collect.ForwardingMap;
-import com.google.common.collect.ForwardingNavigableMap;
 import io.kcache.Cache;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
@@ -38,12 +36,16 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
 
     public InMemoryCache() {
         // Use a concurrent data structure to ensure fail-safe iterators
-        delegate = new ConcurrentSkipListMap<>();
+        this.delegate = new ConcurrentSkipListMap<>();
     }
 
     public InMemoryCache(Comparator<? super K> comparator) {
         // Use a concurrent data structure to ensure fail-safe iterators
-        delegate = new ConcurrentSkipListMap<>(comparator);
+        this.delegate = new ConcurrentSkipListMap<>(comparator);
+    }
+
+    public InMemoryCache(NavigableMap<K, V> delegate) {
+        this.delegate = delegate;
     }
 
     @Override
@@ -57,8 +59,13 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new InMemoryKeyValueIterator<>(delegate.subMap(from, true, to, true).entrySet().iterator());
+    public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        return new InMemoryCache<>(delegate.subMap(from, fromInclusive, to, toInclusive));
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        return new InMemoryKeyValueIterator<>(delegate.subMap(from, fromInclusive, to, toInclusive).entrySet().iterator());
     }
 
     @Override

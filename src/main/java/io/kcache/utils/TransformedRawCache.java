@@ -150,7 +150,19 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
+        byte[] fromBytes = keySerde.serializer().serialize(null, from);
+        byte[] toBytes = keySerde.serializer().serialize(null, to);
+        return new TransformedRawCache<>(
+            keySerde,
+            valueSerde,
+            rawCache.subCache(Bytes.wrap(fromBytes), fromInclusive, Bytes.wrap(toBytes), toInclusive));
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -164,7 +176,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
             return KeyValueIterators.emptyIterator();
         }
 
-        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.range(fromBytes, toBytes);
+        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.range(fromBytes, fromInclusive, toBytes, toInclusive);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rawIterator);
     }
 

@@ -23,6 +23,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -294,6 +296,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             );
     }
 
+    public KafkaCacheConfig(String propsFile) {
+        this(getPropsFromFile(propsFile));
+    }
+
     public KafkaCacheConfig(Properties props) {
         this(config, props);
     }
@@ -337,5 +343,18 @@ public class KafkaCacheConfig extends AbstractConfig {
         }
 
         return sb.toString();
+    }
+
+    public static Properties getPropsFromFile(String propsFile) throws ConfigException {
+        Properties props = new Properties();
+        if (propsFile == null) {
+            return props;
+        }
+        try (FileInputStream propStream = new FileInputStream(propsFile)) {
+            props.load(propStream);
+        } catch (IOException e) {
+            throw new ConfigException("Couldn't load properties from " + propsFile, e);
+        }
+        return props;
     }
 }

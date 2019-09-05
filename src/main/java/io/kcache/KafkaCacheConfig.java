@@ -344,17 +344,4 @@ public class KafkaCacheConfig extends AbstractConfig {
 
         return sb.toString();
     }
-
-    public static Properties getPropsFromFile(String propsFile) throws ConfigException {
-        Properties props = new Properties();
-        if (propsFile == null) {
-            return props;
-        }
-        try (FileInputStream propStream = new FileInputStream(propsFile)) {
-            props.load(propStream);
-        } catch (IOException e) {
-            throw new ConfigException("Couldn't load properties from " + propsFile, e);
-        }
-        return props;
-    }
 }

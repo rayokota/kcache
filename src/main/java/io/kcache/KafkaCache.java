@@ -43,6 +43,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -261,8 +262,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         log.info("Validating topic {}", topic);
 
         Set<String> topics = Collections.singleton(topic);
-        Map<String, TopicDescription> topicDescription = admin.describeTopics(topics)
-            .all().get(initTimeout, TimeUnit.MILLISECONDS);
+        Map<String, TopicDescription> topicDescription;
+        try {
+            topicDescription = admin.describeTopics(topics).all().get(initTimeout, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof UnknownTopicOrPartitionException) {
+                log.error("Could not verify existing topic", e);
+                return;
+            } else {
+                throw e;
+            }
+        }
 
         TopicDescription description = topicDescription.get(topic);
         final int numPartitions = description.partitions().size();

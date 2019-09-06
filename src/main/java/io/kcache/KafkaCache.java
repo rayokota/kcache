@@ -267,7 +267,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             topicDescription = admin.describeTopics(topics).all().get(initTimeout, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
-                log.error("Could not verify existing topic", e);
+                log.warn("Could not verify existing topic.");
                 return;
             } else {
                 throw e;

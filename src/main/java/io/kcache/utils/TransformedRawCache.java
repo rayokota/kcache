@@ -16,17 +16,18 @@
  */
 package io.kcache.utils;
 
+import com.google.common.primitives.SignedBytes;
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -40,11 +41,11 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
 
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private final Cache<Bytes, byte[]> rawCache;
+    private final Cache<byte[], byte[]> rawCache;
 
     public TransformedRawCache(Serde<K> keySerde,
                                Serde<V> valueSerde,
-                               Cache<Bytes, byte[]> rawCache) {
+                               Cache<byte[], byte[]> rawCache) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.rawCache = rawCache;
@@ -69,7 +70,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     @SuppressWarnings("unchecked")
     public boolean containsKey(Object key) {
         byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
-        return rawCache.containsKey(new Bytes(keyBytes));
+        return rawCache.containsKey(keyBytes);
     }
 
     @Override
@@ -84,7 +85,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         byte[] keyBytes = keySerde.serializer().serialize(null, key);
         byte[] valueBytes = valueSerde.serializer().serialize(null, value);
-        byte[] originalValueBytes = rawCache.put(new Bytes(keyBytes), valueBytes);
+        byte[] originalValueBytes = rawCache.put(keyBytes, valueBytes);
         return valueSerde.deserializer().deserialize(null, originalValueBytes);
     }
 
@@ -93,15 +94,15 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         byte[] keyBytes = keySerde.serializer().serialize(null, key);
         byte[] valueBytes = valueSerde.serializer().serialize(null, value);
-        byte[] originalValueBytes = rawCache.putIfAbsent(new Bytes(keyBytes), valueBytes);
+        byte[] originalValueBytes = rawCache.putIfAbsent(keyBytes, valueBytes);
         return valueSerde.deserializer().deserialize(null, originalValueBytes);
     }
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
-        Map<Bytes, byte[]> rawEntries = entries.entrySet().stream()
+        Map<byte[], byte[]> rawEntries = entries.entrySet().stream()
             .collect(Collectors.toMap(
-                e -> new Bytes(keySerde.serializer().serialize(null, e.getKey())),
+                e -> keySerde.serializer().serialize(null, e.getKey()),
                 e -> valueSerde.serializer().serialize(null, e.getValue())));
         rawCache.putAll(rawEntries);
     }
@@ -110,7 +111,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     @SuppressWarnings("unchecked")
     public V get(final Object key) {
         byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
-        byte[] valueBytes = rawCache.get(new Bytes(keyBytes));
+        byte[] valueBytes = rawCache.get(keyBytes);
         return valueSerde.deserializer().deserialize(null, valueBytes);
     }
 
@@ -119,7 +120,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
         byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
-        byte[] valueBytes = rawCache.remove(new Bytes(keyBytes));
+        byte[] valueBytes = rawCache.remove(keyBytes);
         return valueSerde.deserializer().deserialize(null, valueBytes);
     }
 
@@ -158,7 +159,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
         return new TransformedRawCache<>(
             keySerde,
             valueSerde,
-            rawCache.subCache(Bytes.wrap(fromBytes), fromInclusive, Bytes.wrap(toBytes), toInclusive));
+            rawCache.subCache(fromBytes, fromInclusive, toBytes, toInclusive));
     }
 
     @Override
@@ -166,23 +167,16 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
-        Bytes fromBytes = new Bytes(keySerde.serializer().serialize(null, from));
-        Bytes toBytes = new Bytes(keySerde.serializer().serialize(null, to));
+        byte[] fromBytes = keySerde.serializer().serialize(null, from);
+        byte[] toBytes = keySerde.serializer().serialize(null, to);
 
-        if (fromBytes.compareTo(toBytes) > 0) {
-            log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.range(fromBytes, fromInclusive, toBytes, toInclusive);
+        final KeyValueIterator<byte[], byte[]> rawIterator = rawCache.range(fromBytes, fromInclusive, toBytes, toInclusive);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rawIterator);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        final KeyValueIterator<Bytes, byte[]> rawIterator = rawCache.all();
+        final KeyValueIterator<byte[], byte[]> rawIterator = rawCache.all();
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rawIterator);
     }
 

@@ -16,6 +16,7 @@
  */
 package io.kcache.utils.rocksdb;
 
+import com.google.common.primitives.SignedBytes;
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
@@ -23,7 +24,6 @@ import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.Streams;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -64,6 +64,8 @@ import java.util.stream.Collectors;
 public class RocksDBCache<K, V> implements Cache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(RocksDBCache.class);
 
+    private static Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
+
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
@@ -78,7 +80,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     final Comparator<K> comparator;
-    private final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
+    private final Set<KeyValueIterator<byte[], byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     private File dbDir;
     private RocksDB db;
@@ -119,7 +121,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         this.rootDir = rootDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.comparator = comparator;
+        this.comparator = comparator != null ? comparator : (k1, k2) -> {
+            byte[] b1 = keySerde.serializer().serialize(null, k1);
+            byte[] b2 = keySerde.serializer().serialize(null, k2);
+            return BYTES_COMPARATOR.compare(b1, b2);
+        };
     }
 
     private void openDB() {
@@ -128,6 +134,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         final DBOptions dbOptions = new DBOptions();
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
+        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<K>(keySerde, comparator));
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         cache = new LRUCache(BLOCK_CACHE_SIZE);
@@ -250,9 +257,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     public void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
         try (final WriteBatch batch = new WriteBatch()) {
-            Map<Bytes, byte[]> rawEntries = entries.entrySet().stream()
+            Map<byte[], byte[]> rawEntries = entries.entrySet().stream()
                 .collect(Collectors.toMap(
-                    e -> new Bytes(keySerde.serializer().serialize(null, e.getKey())),
+                    e -> keySerde.serializer().serialize(null, e.getKey()),
                     e -> valueSerde.serializer().serialize(null, e.getValue())));
             dbAccessor.prepareBatch(rawEntries, batch);
             write(batch);
@@ -321,19 +328,12 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
-        Bytes fromBytes = new Bytes(keySerde.serializer().serialize(null, from));
-        Bytes toBytes = new Bytes(keySerde.serializer().serialize(null, to));
-
-        if (fromBytes.compareTo(toBytes) > 0) {
-            log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        byte[] fromBytes = keySerde.serializer().serialize(null, from);
+        byte[] toBytes = keySerde.serializer().serialize(null, to);
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive);
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive);
         openIterators.add(rocksDBIterator);
 
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
@@ -342,7 +342,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     @Override
     public KeyValueIterator<K, V> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> rocksDBIterator = dbAccessor.all();
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all();
         openIterators.add(rocksDBIterator);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
     }
@@ -420,10 +420,10 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     private void closeOpenIterators() {
-        final HashSet<KeyValueIterator<Bytes, byte[]>> iterators = new HashSet<>(openIterators);
+        final HashSet<KeyValueIterator<byte[], byte[]>> iterators = new HashSet<>(openIterators);
         if (iterators.size() != 0) {
             log.warn("Closing {} open iterators for store {}", iterators.size(), name);
-            for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {
+            for (final KeyValueIterator<byte[], byte[]> iterator : iterators) {
                 iterator.close();
             }
         }
@@ -434,14 +434,14 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         void put(final byte[] key,
                  final byte[] value);
 
-        void prepareBatch(final Map<Bytes, byte[]> entries,
+        void prepareBatch(final Map<byte[], byte[]> entries,
                           final WriteBatch batch) throws RocksDBException;
 
         byte[] get(final byte[] key) throws RocksDBException;
 
-        KeyValueIterator<Bytes, byte[]> range(Bytes from, boolean fromInclusive, Bytes to, boolean toInclusive);
+        KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive);
 
-        KeyValueIterator<Bytes, byte[]> all();
+        KeyValueIterator<byte[], byte[]> all();
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -482,11 +482,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public void prepareBatch(final Map<Bytes, byte[]> entries,
+        public void prepareBatch(final Map<byte[], byte[]> entries,
                                  final WriteBatch batch) throws RocksDBException {
-            for (final Map.Entry<Bytes, byte[]> entry : entries.entrySet()) {
+            for (final Map.Entry<byte[], byte[]> entry : entries.entrySet()) {
                 Objects.requireNonNull(entry.getKey(), "key cannot be null");
-                addToBatch(entry.getKey().get(), entry.getValue(), batch);
+                addToBatch(entry.getKey(), entry.getValue(), batch);
             }
         }
 
@@ -496,7 +496,16 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> range(Bytes from, boolean fromInclusive, Bytes to, boolean toInclusive) {
+        public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive) {
+            Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<K>(keySerde, comparator);
+
+            if (bytesComparator.compare(from, to) > 0) {
+                log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                return KeyValueIterators.emptyIterator();
+            }
+
             return new RocksDBRangeIterator(
                 name,
                 db.newIterator(columnFamily),
@@ -504,11 +513,12 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 from,
                 fromInclusive,
                 to,
-                toInclusive);
+                toInclusive,
+                bytesComparator);
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all() {
+        public KeyValueIterator<byte[], byte[]> all() {
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
             innerIterWithTimestamp.seekToFirst();
             return new RocksDBIterator(name, innerIterWithTimestamp, openIterators);

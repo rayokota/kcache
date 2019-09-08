@@ -16,52 +16,51 @@
  */
 package io.kcache.utils.rocksdb;
 
+import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
-import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.RocksIterator;
 
 import java.util.Comparator;
 import java.util.Set;
 
 class RocksDBRangeIterator extends RocksDBIterator {
-    // RocksDB's JNI interface does not expose getters/setters that allow the
-    // comparator to be pluggable, and the default is lexicographic, so it's
-    // safe to just force lexicographic comparator here for now.
-    private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
     private final byte[] rawFromKey;
     private final boolean fromInclusive;
     private final byte[] rawToKey;
     private final boolean toInclusive;
+    private final Comparator<byte[]> comparator;
     private boolean checkAndSkipFrom;
 
     RocksDBRangeIterator(String storeName,
                          RocksIterator iter,
-                         Set<KeyValueIterator<Bytes, byte[]>> openIterators,
-                         Bytes from,
+                         Set<KeyValueIterator<byte[], byte[]>> openIterators,
+                         byte[] from,
                          boolean fromInclusive,
-                         Bytes to,
-                         boolean toInclusive) {
+                         byte[] to,
+                         boolean toInclusive,
+                         Comparator<byte[]> comparator) {
         super(storeName, iter, openIterators);
-        this.rawFromKey = from.get();
+        this.rawFromKey = from;
         iter.seek(rawFromKey);
         this.fromInclusive = fromInclusive;
         if (fromInclusive) {
             checkAndSkipFrom = true;
         }
 
-        this.rawToKey = to.get();
+        this.rawToKey = to;
         if (rawToKey == null) {
-            throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+            throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key");
         }
         this.toInclusive = toInclusive;
+        this.comparator = comparator;
     }
 
     @Override
-    public KeyValue<Bytes, byte[]> makeNext() {
-        KeyValue<Bytes, byte[]> next = super.makeNext();
+    public KeyValue<byte[], byte[]> makeNext() {
+        KeyValue<byte[], byte[]> next = super.makeNext();
         if (checkAndSkipFrom) {
-            if (next != null && comparator.compare(next.key.get(), rawFromKey) == 0) {
+            if (next != null && comparator.compare(next.key, rawFromKey) == 0) {
                 next = super.makeNext();
             }
             checkAndSkipFrom = false;
@@ -70,7 +69,7 @@ class RocksDBRangeIterator extends RocksDBIterator {
         if (next == null) {
             return allDone();
         } else {
-            int cmp = comparator.compare(next.key.get(), rawToKey);
+            int cmp = comparator.compare(next.key, rawToKey);
             if (cmp < 0 || (cmp == 0 && toInclusive)) {
                 return next;
             } else {

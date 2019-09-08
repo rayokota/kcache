@@ -18,7 +18,6 @@
 package io.kcache;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 
 import java.util.NoSuchElementException;
 
@@ -54,10 +53,10 @@ public class KeyValueIterators {
     private static class TransformedRawKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
-        private final KeyValueIterator<Bytes, byte[]> rawIterator;
+        private final KeyValueIterator<byte[], byte[]> rawIterator;
 
         TransformedRawKeyValueIterator(
-            Serde<K> keySerde, Serde<V> valueSerde, KeyValueIterator<Bytes, byte[]> rawIterator) {
+            Serde<K> keySerde, Serde<V> valueSerde, KeyValueIterator<byte[], byte[]> rawIterator) {
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
             this.rawIterator = rawIterator;
@@ -68,9 +67,9 @@ public class KeyValueIterators {
         }
 
         public final KeyValue<K, V> next() {
-            KeyValue<Bytes, byte[]> keyValue = this.rawIterator.next();
+            KeyValue<byte[], byte[]> keyValue = this.rawIterator.next();
             return new KeyValue<>(
-                keySerde.deserializer().deserialize(null, keyValue.key.get()),
+                keySerde.deserializer().deserialize(null, keyValue.key),
                 valueSerde.deserializer().deserialize(null, keyValue.value)
             );
         }
@@ -85,7 +84,7 @@ public class KeyValueIterators {
     }
 
     public static <K, V> KeyValueIterator<K, V> transformRawIterator(
-        Serde<K> keySerde, Serde<V> valueSerde, KeyValueIterator<Bytes, byte[]> rawIterator) {
+        Serde<K> keySerde, Serde<V> valueSerde, KeyValueIterator<byte[], byte[]> rawIterator) {
         return new TransformedRawKeyValueIterator<>(keySerde, valueSerde, rawIterator);
     }
 }

@@ -20,24 +20,23 @@ import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheException;
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Bytes;
 import org.rocksdb.RocksIterator;
 
 import java.util.Set;
 
-class RocksDBIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
+class RocksDBIterator extends AbstractIterator<KeyValue<byte[], byte[]>> implements KeyValueIterator<byte[], byte[]> {
 
     private final String storeName;
     private final RocksIterator iter;
-    private final Set<KeyValueIterator<Bytes, byte[]>> openIterators;
+    private final Set<KeyValueIterator<byte[], byte[]>> openIterators;
 
     private volatile boolean open = true;
 
-    private KeyValue<Bytes, byte[]> next;
+    private KeyValue<byte[], byte[]> next;
 
     RocksDBIterator(final String storeName,
                     final RocksIterator iter,
-                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                    final Set<KeyValueIterator<byte[], byte[]>> openIterators) {
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
@@ -52,7 +51,7 @@ class RocksDBIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     }
 
     @Override
-    public KeyValue<Bytes, byte[]> makeNext() {
+    public KeyValue<byte[], byte[]> makeNext() {
         if (!iter.isValid()) {
             return allDone();
         } else {
@@ -62,8 +61,8 @@ class RocksDBIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
         }
     }
 
-    private KeyValue<Bytes, byte[]> getKeyValue() {
-        return new KeyValue<>(new Bytes(iter.key()), iter.value());
+    private KeyValue<byte[], byte[]> getKeyValue() {
+        return new KeyValue<>(iter.key(), iter.value());
     }
 
     @Override

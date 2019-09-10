@@ -44,7 +44,7 @@ class RocksDBRangeIterator extends RocksDBIterator {
         this.rawFromKey = from;
         iter.seek(rawFromKey);
         this.fromInclusive = fromInclusive;
-        if (fromInclusive) {
+        if (!fromInclusive) {
             checkAndSkipFrom = true;
         }
 

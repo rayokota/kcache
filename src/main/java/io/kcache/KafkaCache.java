@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -60,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +69,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 public class KafkaCache<K, V> implements Cache<K, V> {
 
@@ -74,6 +77,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private String topic;
     private int desiredReplicationFactor;
+    private int desiredNumPartitions;
     private String groupId;
     private String clientId;
     private CacheUpdateHandler<K, V> cacheUpdateHandler;
@@ -118,6 +122,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                        Cache<K, V> localCache) {
         this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
         this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
+        this.desiredNumPartitions = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG);
         this.groupId = config.getString(KafkaCacheConfig.KAFKACACHE_GROUP_ID_CONFIG);
         this.clientId = config.getString(KafkaCacheConfig.KAFKACACHE_CLIENT_ID_CONFIG);
         if (this.clientId == null) {
@@ -237,7 +242,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 + "crucial to add more brokers and increase the replication factor of the topic.");
         }
 
-        NewTopic topicRequest = new NewTopic(topic, 1, (short) topicReplicationFactor);
+        NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
         topicRequest.configs(
             Collections.singletonMap(
                 TopicConfig.CLEANUP_POLICY_CONFIG,
@@ -276,9 +281,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         TopicDescription description = topicDescription.get(topic);
         final int numPartitions = description.partitions().size();
-        if (numPartitions != 1) {
-            throw new CacheInitializationException("The topic " + topic + " should have only 1 "
-                + "partition but has " + numPartitions);
+        if (numPartitions < desiredNumPartitions) {
+            log.warn("The number of partitions for the topic "
+                + topic
+                + " is less than the desired value of "
+                + desiredReplicationFactor
+                + ".");
         }
 
         if (description.partitions().get(0).replicas().size() < desiredReplicationFactor) {
@@ -352,7 +360,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         ProducerRecord<byte[], byte[]> producerRecord;
         try {
             producerRecord =
-                new ProducerRecord<>(topic, 0, this.keySerde.serializer().serialize(topic, key),
+                new ProducerRecord<>(topic, this.keySerde.serializer().serialize(topic, key),
                     value == null ? null : this.valueSerde.serializer().serialize(topic, value));
         } catch (Exception e) {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
@@ -364,8 +372,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
             log.trace("Waiting for the local cache to catch up to offset " + recordMetadata.offset());
+            int lastWrittenPartition = recordMetadata.partition();
             long lastWrittenOffset = recordMetadata.offset();
-            kafkaTopicReader.waitUntilOffset(lastWrittenOffset, Duration.ofMillis(timeout));
+            kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
@@ -479,10 +488,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
      */
     private class WorkerThread extends ShutdownableThread {
 
-        private final TopicPartition topicPartition;
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
-        private long offsetInTopic = -1L;
+        private Map<Integer, Long> offsetsInTopic = new ConcurrentHashMap<>();
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);
@@ -510,17 +518,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw new IllegalArgumentException("Unable to subscribe to the Kafka topic "
                     + topic
                     + " backing this data cache. Topic may not exist.");
-            } else if (partitions.size() > 1) {
-                throw new IllegalStateException("Unexpected number of partitions in the "
-                    + topic
-                    + " topic. Expected 1 and instead got " + partitions.size());
             }
 
-            this.topicPartition = new TopicPartition(topic, 0);
-            consumer.assign(Collections.singletonList(this.topicPartition));
-            consumer.seekToBeginning(Collections.singletonList(this.topicPartition));
+            List<TopicPartition> topicPartitions = partitions.stream()
+                .peek(p -> offsetsInTopic.put(p.partition(), -1L))
+                .map(p -> new TopicPartition(topic, p.partition()))
+                .collect(Collectors.toList());
+            consumer.assign(topicPartitions);
+            consumer.seekToBeginning(topicPartitions);
 
-            log.info("Initialized last consumed offset to " + offsetInTopic);
+            log.info("Initialized last consumed offset to " + offsetsInTopic);
 
             log.debug("KafkaTopicReader thread started.");
         }
@@ -588,7 +595,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 try {
                                     ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
                                         topic,
-                                        0,
                                         record.key(),
                                         null
                                     );
@@ -598,7 +604,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 }
                             }
                         }
-                        updateOffset(record.offset());
+                        updateOffset(record.partition(), record.offset());
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic"
                             + topic
@@ -617,27 +623,27 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void updateOffset(long offset) {
+        private void updateOffset(int partition, long offset) {
             try {
                 offsetUpdateLock.lock();
-                offsetInTopic = offset;
+                offsetsInTopic.put(partition, offset);
                 offsetReachedThreshold.signalAll();
             } finally {
                 offsetUpdateLock.unlock();
             }
         }
 
-        private void waitUntilOffset(long offset, Duration timeout) throws CacheException {
+        private void waitUntilOffset(int partition, long offset, Duration timeout) throws CacheException {
             if (offset < 0) {
                 throw new CacheException("KafkaTopicReader thread can't wait for a negative offset.");
             }
 
-            log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetInTopic);
+            log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetsInTopic.get(partition));
 
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = timeout.toNanos();
-                while ((offsetInTopic < offset) && (timeoutNs > 0)) {
+                while ((offsetsInTopic.get(partition) < offset) && (timeoutNs > 0)) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
@@ -649,10 +655,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 offsetUpdateLock.unlock();
             }
 
-            if (offsetInTopic < offset) {
+            if (offsetsInTopic.get(partition) < offset) {
                 throw new CacheTimeoutException(
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
-                        + "targetOffset: " + offset + ", offsetReached: " + offsetInTopic
+                        + "targetOffset: " + offset + ", offsetReached: " + offsetsInTopic.get(partition)
                         + ", timeout(ms): " + timeout.toMillis());
             }
         }

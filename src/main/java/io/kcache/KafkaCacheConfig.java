@@ -62,6 +62,11 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static final String KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG = "kafkacache.topic.replication.factor";
     public static final int DEFAULT_KAFKACACHE_TOPIC_REPLICATION_FACTOR = 3;
     /**
+     * <code>kafkacache.topic.num.partitions</code>
+     */
+    public static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG = "kafkacache.topic.num.partitions";
+    public static final int DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS = 1;
+    /**
      * <code>kafkacache.timeout.ms</code>
      */
     public static final String KAFKACACHE_TIMEOUT_CONFIG = "kafkacache.timeout.ms";
@@ -125,6 +130,8 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_TOPIC_REPLICATION_FACTOR_DOC =
         "The desired replication factor of the topic. The actual replication factor "
             + "will be the smaller of this value and the number of live Kafka brokers.";
+    protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
+        "The desired number of partitions factor for the topic.";
     protected static final String KAFKACACHE_INIT_TIMEOUT_DOC =
         "The timeout for initialization of the Kafka cache, including creation of the Kafka topic "
             + "that stores data.";
@@ -198,6 +205,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKACACHE_TOPIC_REPLICATION_FACTOR,
                 ConfigDef.Importance.HIGH, KAFKACACHE_TOPIC_REPLICATION_FACTOR_DOC
+            )
+            .define(KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC
             )
             .define(KAFKACACHE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_INIT_TIMEOUT_DOC

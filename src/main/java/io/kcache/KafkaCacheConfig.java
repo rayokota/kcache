@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
@@ -300,11 +301,11 @@ public class KafkaCacheConfig extends AbstractConfig {
         this(getPropsFromFile(propsFile));
     }
 
-    public KafkaCacheConfig(Properties props) {
+    public KafkaCacheConfig(Map<?, ?> props) {
         this(config, props);
     }
 
-    public KafkaCacheConfig(ConfigDef configDef, Properties props) {
+    public KafkaCacheConfig(ConfigDef configDef, Map<?, ?> props) {
         super(configDef, props);
     }
 

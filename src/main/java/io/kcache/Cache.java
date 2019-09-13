@@ -30,4 +30,6 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
     KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive);
 
     KeyValueIterator<K, V> all();
+
+    void flush();
 }

@@ -378,6 +378,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         return value < 0;
     }
 
+    @Override
     public void flush() {
         if (db == null) {
             return;
@@ -595,6 +596,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         public void init() {
+        }
+
+        public void flush() {
         }
 
         public void close() {

@@ -84,6 +84,11 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
     }
 
     @Override
+    public void flush() {
+        // do nothing
+    }
+
+    @Override
     public void close() {
         // do nothing
     }

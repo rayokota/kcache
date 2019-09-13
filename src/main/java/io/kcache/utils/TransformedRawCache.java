@@ -181,6 +181,11 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public void flush() {
+        rawCache.flush();
+    }
+
+    @Override
     public void close() throws IOException {
         rawCache.close();
     }

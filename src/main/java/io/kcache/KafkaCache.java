@@ -85,6 +85,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private AtomicBoolean initialized = new AtomicBoolean(false);
+    private boolean enableCommit;
     private int initTimeout;
     private int timeout;
     private String bootstrapBrokers;
@@ -128,6 +129,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (this.clientId == null) {
         	this.clientId = "kafka-cache-reader-" + this.topic;
         }
+        this.enableCommit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value) -> {
@@ -448,6 +450,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public void flush() {
+        assertInitialized();
+        localCache.flush();
+    }
+
+    @Override
     public void close() throws IOException {
         if (kafkaTopicReader != null) {
             try {
@@ -525,7 +533,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .map(p -> new TopicPartition(topic, p.partition()))
                 .collect(Collectors.toList());
             consumer.assign(topicPartitions);
-            consumer.seekToBeginning(topicPartitions);
+            if (!enableCommit) {
+                consumer.seekToBeginning(topicPartitions);
+            }
 
             log.info("Initialized last consumed offset to " + offsetsInTopic);
 
@@ -537,6 +547,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
             log.trace("Reading to end of offsets {}", endOffsets);
 
+            int count = 0;
             while (!endOffsets.isEmpty()) {
                 Iterator<Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
                 while (it.hasNext()) {
@@ -544,11 +555,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     if (consumer.position(entry.getKey()) >= entry.getValue())
                         it.remove();
                     else {
-                        poll();
+                        count += poll();
                         break;
                     }
                 }
             }
+            log.info("During initialization, processed {} records from topic {}", count, topic);
         }
 
         @Override
@@ -556,7 +568,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             poll();
         }
 
-        private void poll() {
+        private int poll() {
+            int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -611,6 +624,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             + " to the local cache", se);
                     }
                 }
+                if (enableCommit) {
+                    consumer.commitAsync();
+                }
+                count = records.count();
             } catch (WakeupException we) {
                 // do nothing because the thread is closing -- see shutdown()
             } catch (RecordTooLargeException rtle) {
@@ -621,6 +638,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 log.error("KafkaTopicReader thread has died for an unknown reason.", e);
                 throw e;
             }
+            return count;
         }
 
         private void updateOffset(int partition, long offset) {

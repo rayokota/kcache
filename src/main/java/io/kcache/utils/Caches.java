@@ -122,6 +122,10 @@ public class Caches {
             return m.all(); // Must be manually synched by user!
         }
 
+        public void flush() {
+            m.flush();
+        }
+
         public synchronized void close() throws IOException {
             m.close();
         }

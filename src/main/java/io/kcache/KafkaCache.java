@@ -533,7 +533,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .map(p -> new TopicPartition(topic, p.partition()))
                 .collect(Collectors.toList());
             consumer.assign(topicPartitions);
-            if (!enableCommit) {
+            if (localCache.isEmpty()) {
                 consumer.seekToBeginning(topicPartitions);
             }
 

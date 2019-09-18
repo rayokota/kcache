@@ -40,7 +40,7 @@
         <kafka.version>2.3.0</kafka.version>
         <kafka.scala.version>2.12</kafka.scala.version>
         <guava.version>27.1-jre</guava.version>
-        <rocksdb.version>5.18.3</rocksdb.version>
+        <rocksdb.version>6.2.2</rocksdb.version>
         <scala.version>2.12.8</scala.version>
         <zookeeper.version>3.4.14</zookeeper.version>
     </properties>

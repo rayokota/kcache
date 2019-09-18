@@ -373,8 +373,9 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public void setMaxSubcompactions(final int maxSubcompactions) {
+    public Options setMaxSubcompactions(final int maxSubcompactions) {
         dbOptions.setMaxSubcompactions(maxSubcompactions);
+        return this;
     }
 
     @Override

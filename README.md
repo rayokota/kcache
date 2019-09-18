@@ -1,5 +1,16 @@
 # KCache - An In-Memory Cache Backed by Kafka
 
+[![Build Status][travis-shield]][travis-link]
+[![Maven][maven-shield]][maven-link]
+[![Javadoc][javadoc-shield]][javadoc-link]
+
+[travis-shield]: https://travis-ci.org/rayokota/kcache.svg?branch=master
+[travis-link]: https://travis-ci.org/rayokota/kcache
+[maven-shield]: https://img.shields.io/maven-central/v/io.kcache/kcache.svg
+[maven-link]: https://search.maven.org/#search%7Cga%7C1%7Cio.kcache
+[javadoc-shield]: https://javadoc.io/badge/io.kcache/kcache.svg?color=blue
+[javadoc-link]: https://javadoc.io/doc/io.kcache/kcache
+
 KCache is a client library that provides an in-memory cache backed by a compacted topic in Kafka.  It is one of the patterns for using Kafka  as a persistent store, as described by Jay Kreps in the article [It's Okay to Store Data in Apache Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/).
 
 ## Installing
@@ -10,7 +21,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>1.0.1</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 

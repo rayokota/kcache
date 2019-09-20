@@ -152,8 +152,6 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
 
     @Override
     public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
         byte[] fromBytes = keySerde.serializer().serialize(null, from);
         byte[] toBytes = keySerde.serializer().serialize(null, to);
         return new TransformedRawCache<>(
@@ -164,9 +162,6 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
-
         byte[] fromBytes = keySerde.serializer().serialize(null, from);
         byte[] toBytes = keySerde.serializer().serialize(null, to);
 

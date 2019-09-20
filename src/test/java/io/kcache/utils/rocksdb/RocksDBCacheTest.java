@@ -121,7 +121,7 @@ public class RocksDBCacheTest {
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
 
-        RocksDBCache.subCache(
+        subCache = RocksDBCache.subCache(
             new Bytes(stringSerializer.serialize(null, "1")),
             false,
             new Bytes(stringSerializer.serialize(null, "3")),
@@ -131,7 +131,7 @@ public class RocksDBCacheTest {
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
 
-        RocksDBCache.subCache(
+        subCache = RocksDBCache.subCache(
             new Bytes(stringSerializer.serialize(null, "1")),
             false,
             new Bytes(stringSerializer.serialize(null, "4")),
@@ -140,6 +140,24 @@ public class RocksDBCacheTest {
         assertEquals(2, subCache.size());
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
+
+        subCache = RocksDBCache.subCache(
+            null,
+            false,
+            new Bytes(stringSerializer.serialize(null, "4")),
+            false);
+
+        assertEquals(3, subCache.size());
+        assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
+
+        subCache = RocksDBCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            false,
+            null,
+            false);
+
+        assertEquals(3, subCache.size());
+        assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
     }
 
     @Test

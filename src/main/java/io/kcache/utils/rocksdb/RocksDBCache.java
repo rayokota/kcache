@@ -317,17 +317,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        if (from == null || to == null) {
-            throw new NullPointerException();
-        }
         return new SubCache<>(this, from, fromInclusive, to, toInclusive, false);
     }
 
     @Override
     public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
-
         byte[] fromBytes = keySerde.serializer().serialize(null, from);
         byte[] toBytes = keySerde.serializer().serialize(null, to);
 
@@ -500,7 +494,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive) {
             Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<K>(keySerde, comparator);
 
-            if (bytesComparator.compare(from, to) > 0) {
+            if (from != null && to != null && bytesComparator.compare(from, to) > 0) {
                 log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                     + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                     "Note that the built-in numerical serdes do not follow this for negative numbers");

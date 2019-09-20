@@ -42,16 +42,17 @@ class RocksDBRangeIterator extends RocksDBIterator {
                          Comparator<byte[]> comparator) {
         super(storeName, iter, openIterators);
         this.rawFromKey = from;
-        iter.seek(rawFromKey);
+        if (rawFromKey == null) {
+            iter.seekToFirst();
+        } else {
+            iter.seek(rawFromKey);
+        }
         this.fromInclusive = fromInclusive;
-        if (!fromInclusive) {
+        if (rawFromKey != null && !fromInclusive) {
             checkAndSkipFrom = true;
         }
 
         this.rawToKey = to;
-        if (rawToKey == null) {
-            throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key");
-        }
         this.toInclusive = toInclusive;
         this.comparator = comparator;
     }
@@ -68,6 +69,8 @@ class RocksDBRangeIterator extends RocksDBIterator {
 
         if (next == null) {
             return allDone();
+        } else if (rawToKey == null) {
+            return next;
         } else {
             int cmp = comparator.compare(next.key, rawToKey);
             if (cmp < 0 || (cmp == 0 && toInclusive)) {

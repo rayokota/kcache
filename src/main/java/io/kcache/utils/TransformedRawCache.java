@@ -16,7 +16,6 @@
  */
 package io.kcache.utils;
 
-import com.google.common.primitives.SignedBytes;
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
@@ -27,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;

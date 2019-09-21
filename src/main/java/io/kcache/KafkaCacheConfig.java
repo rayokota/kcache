@@ -329,14 +329,6 @@ public class KafkaCacheConfig extends AbstractConfig {
         super(configDef, props);
     }
 
-    public int getDefaultInitTimeout() {
-        return 60000;
-    }
-
-    public int getDefaultTimeout() {
-        return 500;
-    }
-
     public String bootstrapBrokers() {
         List<String> bootstrapServers = getList(KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG);
         String securityProtocol = this.getString(KAFKACACHE_SECURITY_PROTOCOL_CONFIG);

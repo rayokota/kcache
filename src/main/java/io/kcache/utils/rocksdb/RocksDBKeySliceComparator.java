@@ -26,11 +26,11 @@ import java.util.Comparator;
 
 public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
 
-    private Comparator<byte[]> comparator;
+    private final Comparator<byte[]> comparator;
 
     public RocksDBKeySliceComparator(Serde<K> keySerde, Comparator<K> keyComparator) {
         super(new ComparatorOptions());
-        this.comparator = new RocksDBKeyComparator<K>(keySerde, keyComparator);
+        this.comparator = new RocksDBKeyComparator<>(keySerde, keyComparator);
     }
 
     @Override

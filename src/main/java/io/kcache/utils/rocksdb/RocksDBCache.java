@@ -64,7 +64,7 @@ import java.util.stream.Collectors;
 public class RocksDBCache<K, V> implements Cache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(RocksDBCache.class);
 
-    private static Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
+    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
 
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
@@ -134,7 +134,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         final DBOptions dbOptions = new DBOptions();
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
-        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<K>(keySerde, comparator));
+        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<>(keySerde, comparator));
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         cache = new LRUCache(BLOCK_CACHE_SIZE);
@@ -142,7 +142,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         tableConfig.setBlockSize(BLOCK_SIZE);
 
         filter = new BloomFilter();
-        tableConfig.setFilter(filter);
+        tableConfig.setFilterPolicy(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
@@ -492,7 +492,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         @Override
         public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive) {
-            Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<K>(keySerde, comparator);
+            Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<>(keySerde, comparator);
 
             if (from != null && to != null && bytesComparator.compare(from, to) > 0) {
                 log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
@@ -552,28 +552,40 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
     static int cpr(Comparator c, Object x, Object y) {
-        return (c != null) ? c.compare(x, y) : ((Comparable)x).compareTo(y);
+        return (c != null) ? c.compare(x, y) : ((Comparable) x).compareTo(y);
     }
 
-    static final class SubCache<K,V> implements Cache<K,V> {
+    static final class SubCache<K, V> implements Cache<K, V> {
 
-        /** Underlying cache */
-        private final RocksDBCache<K,V> m;
-        /** lower bound key, or null if from start */
+        /**
+         * Underlying cache
+         */
+        private final RocksDBCache<K, V> m;
+        /**
+         * lower bound key, or null if from start
+         */
         private final K lo;
-        /** upper bound key, or null if to end */
+        /**
+         * upper bound key, or null if to end
+         */
         private final K hi;
-        /** inclusion flag for lo */
+        /**
+         * inclusion flag for lo
+         */
         private final boolean loInclusive;
-        /** inclusion flag for hi */
+        /**
+         * inclusion flag for hi
+         */
         private final boolean hiInclusive;
-        /** direction */
+        /**
+         * direction
+         */
         private final boolean isDescending;
 
         /**
          * Creates a new submap, initializing all fields.
          */
-        SubCache(RocksDBCache<K,V> map,
+        SubCache(RocksDBCache<K, V> map,
                  K fromKey, boolean fromInclusive,
                  K toKey, boolean toInclusive,
                  boolean isDescending) {
@@ -693,8 +705,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
          * Utility to create submaps, where given bounds override
          * unbounded(null) ones and/or are checked against bounded ones.
          */
-        SubCache<K,V> newSubCache(K fromKey, boolean fromInclusive,
-                                  K toKey, boolean toInclusive) {
+        SubCache<K, V> newSubCache(K fromKey, boolean fromInclusive,
+                                   K toKey, boolean toInclusive) {
             Comparator<? super K> cmp = m.comparator;
             if (isDescending) { // flip senses
                 K tk = fromKey;
@@ -708,8 +720,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 if (fromKey == null) {
                     fromKey = lo;
                     fromInclusive = loInclusive;
-                }
-                else {
+                } else {
                     int c = cpr(cmp, fromKey, lo);
                     if (c < 0 || (c == 0 && !loInclusive && fromInclusive))
                         throw new IllegalArgumentException("key out of range");
@@ -719,8 +730,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 if (toKey == null) {
                     toKey = hi;
                     toInclusive = hiInclusive;
-                }
-                else {
+                } else {
                     int c = cpr(cmp, toKey, hi);
                     if (c > 0 || (c == 0 && !hiInclusive && toInclusive))
                         throw new IllegalArgumentException("key out of range");
@@ -730,8 +740,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 toKey, toInclusive, isDescending);
         }
 
-        public SubCache<K,V> subCache(K fromKey, boolean fromInclusive,
-                                      K toKey, boolean toInclusive) {
+        public SubCache<K, V> subCache(K fromKey, boolean fromInclusive,
+                                       K toKey, boolean toInclusive) {
             return newSubCache(fromKey, fromInclusive, toKey, toInclusive);
         }
 
@@ -749,7 +759,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 .collect(Collectors.toList());
         }
 
-        public Set<Map.Entry<K,V>> entrySet() {
+        public Set<Map.Entry<K, V>> entrySet() {
             return Streams.streamOf(all())
                 .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
                 .collect(Collectors.toSet());
@@ -774,8 +784,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 if (fromKey == null) {
                     fromKey = lo;
                     fromInclusive = loInclusive;
-                }
-                else {
+                } else {
                     int c = cpr(cmp, fromKey, lo);
                     if (c < 0 || (c == 0 && !loInclusive && fromInclusive))
                         throw new IllegalArgumentException("key out of range");
@@ -785,8 +794,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 if (toKey == null) {
                     toKey = hi;
                     toInclusive = hiInclusive;
-                }
-                else {
+                } else {
                     int c = cpr(cmp, toKey, hi);
                     if (c > 0 || (c == 0 && !hiInclusive && toInclusive))
                         throw new IllegalArgumentException("key out of range");

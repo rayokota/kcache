@@ -26,9 +26,13 @@ import java.util.Objects;
  */
 public class KeyValue<K, V> {
 
-    /** The key of the key-value pair. */
+    /**
+     * The key of the key-value pair.
+     */
     public final K key;
-    /** The value of the key-value pair. */
+    /**
+     * The value of the key-value pair.
+     */
     public final V value;
 
     /**

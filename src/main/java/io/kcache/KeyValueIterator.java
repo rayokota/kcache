@@ -21,7 +21,7 @@ import java.util.Iterator;
 
 /**
  * Iterator interface of {@link KeyValue}.
- *
+ * <p>
  * Users must call its {@code close} method explicitly upon completeness to release resources,
  * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
  *

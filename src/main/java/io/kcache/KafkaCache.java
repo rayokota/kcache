@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -127,7 +126,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.groupId = config.getString(KafkaCacheConfig.KAFKACACHE_GROUP_ID_CONFIG);
         this.clientId = config.getString(KafkaCacheConfig.KAFKACACHE_CLIENT_ID_CONFIG);
         if (this.clientId == null) {
-        	this.clientId = "kafka-cache-reader-" + this.topic;
+            this.clientId = "kafka-cache-reader-" + this.topic;
         }
         this.enableCommit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
@@ -498,7 +497,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
-        private Map<Integer, Long> offsetsInTopic = new ConcurrentHashMap<>();
+        private final Map<Integer, Long> offsetsInTopic = new ConcurrentHashMap<>();
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);

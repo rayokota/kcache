@@ -41,26 +41,26 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
      * on an attempt to insert a key outside of its range, or to construct a
      * subcache either of whose endpoints lie outside its range.
      *
-     * @param fromKey low endpoint of the keys in the returned cache;
-     *        {@code null} indicates the beginning
+     * @param fromKey       low endpoint of the keys in the returned cache;
+     *                      {@code null} indicates the beginning
      * @param fromInclusive {@code true} if the low endpoint
-     *        is to be included in the returned view
-     * @param toKey high endpoint of the keys in the returned cache;
-     *        {@code null} indicates the end
-     * @param toInclusive {@code true} if the high endpoint
-     *        is to be included in the returned view
+     *                      is to be included in the returned view
+     * @param toKey         high endpoint of the keys in the returned cache;
+     *                      {@code null} indicates the end
+     * @param toInclusive   {@code true} if the high endpoint
+     *                      is to be included in the returned view
      * @return a view of the portion of this cache whose keys range from
-     *         {@code fromKey} to {@code toKey}
-     * @throws ClassCastException if {@code fromKey} and {@code toKey}
-     *         cannot be compared to one another using this cache's comparator
-     *         (or, if the cache has no comparator, using natural ordering).
-     *         Implementations may, but are not required to, throw this
-     *         exception if {@code fromKey} or {@code toKey}
-     *         cannot be compared to keys currently in the cache.
+     * {@code fromKey} to {@code toKey}
+     * @throws ClassCastException       if {@code fromKey} and {@code toKey}
+     *                                  cannot be compared to one another using this cache's comparator
+     *                                  (or, if the cache has no comparator, using natural ordering).
+     *                                  Implementations may, but are not required to, throw this
+     *                                  exception if {@code fromKey} or {@code toKey}
+     *                                  cannot be compared to keys currently in the cache.
      * @throws IllegalArgumentException if {@code fromKey} is greater than
-     *         {@code toKey}; or if this cache itself has a restricted
-     *         range, and {@code fromKey} or {@code toKey} lies
-     *         outside the bounds of the range
+     *                                  {@code toKey}; or if this cache itself has a restricted
+     *                                  range, and {@code fromKey} or {@code toKey} lies
+     *                                  outside the bounds of the range
      */
     Cache<K, V> subCache(K fromKey, boolean fromInclusive, K toKey, boolean toInclusive);
 
@@ -78,26 +78,26 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
      * {@code toKey} are equal, the returned iterator is empty unless
      * {@code fromInclusive} and {@code toInclusive} are both true.
      *
-     * @param fromKey low endpoint of the keys in the returned iterator;
-     *        {@code null} indicates the beginning
+     * @param fromKey       low endpoint of the keys in the returned iterator;
+     *                      {@code null} indicates the beginning
      * @param fromInclusive {@code true} if the low endpoint
-     *        is to be included in the returned view
-     * @param toKey high endpoint of the keys in the returned iterator;
-     *        {@code null} indicates the end
-     * @param toInclusive {@code true} if the high endpoint
-     *        is to be included in the returned view
+     *                      is to be included in the returned view
+     * @param toKey         high endpoint of the keys in the returned iterator;
+     *                      {@code null} indicates the end
+     * @param toInclusive   {@code true} if the high endpoint
+     *                      is to be included in the returned view
      * @return an iterator over the portion of this cache whose keys range from
-     *         {@code fromKey} to {@code toKey}
-     * @throws ClassCastException if {@code fromKey} and {@code toKey}
-     *         cannot be compared to one another using this cache's comparator
-     *         (or, if the cache has no comparator, using natural ordering).
-     *         Implementations may, but are not required to, throw this
-     *         exception if {@code fromKey} or {@code toKey}
-     *         cannot be compared to keys currently in the cache.
+     * {@code fromKey} to {@code toKey}
+     * @throws ClassCastException       if {@code fromKey} and {@code toKey}
+     *                                  cannot be compared to one another using this cache's comparator
+     *                                  (or, if the cache has no comparator, using natural ordering).
+     *                                  Implementations may, but are not required to, throw this
+     *                                  exception if {@code fromKey} or {@code toKey}
+     *                                  cannot be compared to keys currently in the cache.
      * @throws IllegalArgumentException if {@code fromKey} is greater than
-     *         {@code toKey}; or if this cache itself has a restricted
-     *         range, and {@code fromKey} or {@code toKey} lies
-     *         outside the bounds of the range
+     *                                  {@code toKey}; or if this cache itself has a restricted
+     *                                  range, and {@code fromKey} or {@code toKey} lies
+     *                                  outside the bounds of the range
      */
     KeyValueIterator<K, V> range(K fromKey, boolean fromInclusive, K toKey, boolean toInclusive);
 

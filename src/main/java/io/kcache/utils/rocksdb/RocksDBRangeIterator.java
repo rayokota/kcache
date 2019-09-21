@@ -16,7 +16,6 @@
  */
 package io.kcache.utils.rocksdb;
 
-import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import org.rocksdb.RocksIterator;

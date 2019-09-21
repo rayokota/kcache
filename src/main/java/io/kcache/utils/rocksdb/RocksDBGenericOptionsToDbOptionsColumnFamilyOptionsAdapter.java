@@ -51,7 +51,7 @@ import java.util.List;
  * The generic {@link Options} class allows users to set all configs on one object if only default column family
  * is used. Because we use multiple column families, we need to use {@link DBOptions} and {@link ColumnFamilyOptions}
  * that cover a part of all options each.
- *
+ * <p>
  * This class do the translation between generic {@link Options} into {@link DBOptions} and {@link ColumnFamilyOptions}.
  */
 class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
@@ -207,7 +207,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public long writeBufferSize()  {
+    public long writeBufferSize() {
         return columnFamilyOptions.writeBufferSize();
     }
 

@@ -24,8 +24,8 @@ import java.util.Comparator;
 
 public class RocksDBKeyComparator<K> implements Comparator<byte[]> {
 
-    private Serde<K> keySerde;
-    private Comparator<K> keyComparator;
+    private final Serde<K> keySerde;
+    private final Comparator<K> keyComparator;
 
     public RocksDBKeyComparator(Serde<K> keySerde, Comparator<K> keyComparator) {
         this.keySerde = keySerde;

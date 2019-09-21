@@ -100,6 +100,41 @@ public class RocksDBCacheTest {
             stringDeserializer.deserialize(
                 null,
                 RocksDBCache.get(new Bytes(stringSerializer.serialize(null, "4")))));
+    }
+
+    @Test
+    public void shouldPutOnlyIfAbsentValue() {
+        RocksDBCache.init();
+        final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
+        final byte[] valueBytes = stringSerializer.serialize(null, "A");
+        final byte[] valueBytesUpdate = stringSerializer.serialize(null, "B");
+
+        RocksDBCache.putIfAbsent(keyBytes, valueBytes);
+        RocksDBCache.putIfAbsent(keyBytes, valueBytesUpdate);
+
+        final String retrievedValue = stringDeserializer.deserialize(null, RocksDBCache.get(keyBytes));
+        assertEquals("A", retrievedValue);
+    }
+
+    @Test
+    public void shouldReturnSubCaches() {
+        final Map<Bytes, byte[]> entries = new HashMap<>();
+        entries.put(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            stringSerializer.serialize(null, "a"));
+        entries.put(
+            new Bytes(stringSerializer.serialize(null, "2")),
+            stringSerializer.serialize(null, "b"));
+        entries.put(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            stringSerializer.serialize(null, "c"));
+        entries.put(
+            new Bytes(stringSerializer.serialize(null, "4")),
+            stringSerializer.serialize(null, "d"));
+
+        RocksDBCache.init();
+        RocksDBCache.putAll(entries);
+        RocksDBCache.flush();
 
         Cache<Bytes, byte[]> subCache = RocksDBCache.subCache(
             new Bytes(stringSerializer.serialize(null, "2")),
@@ -158,19 +193,5 @@ public class RocksDBCacheTest {
 
         assertEquals(3, subCache.size());
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
-    }
-
-    @Test
-    public void shouldPutOnlyIfAbsentValue() {
-        RocksDBCache.init();
-        final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
-        final byte[] valueBytes = stringSerializer.serialize(null, "A");
-        final byte[] valueBytesUpdate = stringSerializer.serialize(null, "B");
-
-        RocksDBCache.putIfAbsent(keyBytes, valueBytes);
-        RocksDBCache.putIfAbsent(keyBytes, valueBytesUpdate);
-
-        final String retrievedValue = stringDeserializer.deserialize(null, RocksDBCache.get(keyBytes));
-        assertEquals("A", retrievedValue);
     }
 }

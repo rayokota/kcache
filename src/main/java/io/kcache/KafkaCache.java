@@ -147,7 +147,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     public void init() throws CacheInitializationException {
         if (initialized.get()) {
             throw new CacheInitializationException(
-                "Illegal state while initializing cache. Cache was already initialized");
+                "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
         }
         localCache.init();
 
@@ -163,8 +163,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         boolean isInitialized = initialized.compareAndSet(false, true);
         if (!isInitialized) {
-            throw new CacheInitializationException("Illegal state while initializing cache. Cache "
-                + "was already initialized");
+            throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
+                + ". Cache was already initialized");
         }
     }
 
@@ -213,12 +213,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         } catch (TimeoutException e) {
             throw new CacheInitializationException(
-                "Timed out trying to create or validate topic configuration",
+                "Timed out trying to create or validate topic " + topic,
                 e
             );
         } catch (InterruptedException | ExecutionException e) {
             throw new CacheInitializationException(
-                "Failed trying to create or validate topic configuration",
+                "Failed trying to create or validate topic " + topic,
                 e
             );
         }
@@ -474,7 +474,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private void assertInitialized() throws CacheException {
         if (!initialized.get()) {
-            throw new CacheException("Illegal state. Cache not initialized yet");
+            throw new CacheException("Illegal state. Cache for " + clientId + " not initialized yet");
         }
     }
 

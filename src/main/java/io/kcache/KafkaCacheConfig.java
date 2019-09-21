@@ -219,10 +219,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG, ConfigDef.Type.BOOLEAN, false,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_ENABLE_OFFSET_COMMIT_DOC
             )
-            .define(KAFKACACHE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
+            .define(KAFKACACHE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_INIT_TIMEOUT_DOC
             )
-            .define(KAFKACACHE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 500, atLeast(0),
+            .define(KAFKACACHE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TIMEOUT_DOC
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
@@ -327,6 +327,14 @@ public class KafkaCacheConfig extends AbstractConfig {
 
     public KafkaCacheConfig(ConfigDef configDef, Map<?, ?> props) {
         super(configDef, props);
+    }
+
+    public int getDefaultInitTimeout() {
+        return 60000;
+    }
+
+    public int getDefaultTimeout() {
+        return 500;
     }
 
     public String bootstrapBrokers() {

@@ -140,7 +140,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.config = config;
         this.bootstrapBrokers = config.bootstrapBrokers();
 
-        log.info("Initializing Kafka cache with broker endpoints: " + this.bootstrapBrokers);
+        log.info("Initializing Kafka cache {} with broker endpoints {} ", clientId, bootstrapBrokers);
     }
 
     @Override
@@ -466,10 +466,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         if (producer != null) {
             producer.close();
-            log.debug("Kafka cache producer shut down");
+            log.debug("Kafka cache producer shut down for {}", clientId);
         }
         localCache.close();
-        log.debug("Kafka cache shut down complete");
+        log.info("Kafka cache shut down complete for {}", clientId);
     }
 
     private void assertInitialized() throws CacheException {
@@ -539,7 +539,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             log.info("Initialized last consumed offset to " + offsetsInTopic);
 
-            log.debug("KafkaTopicReader thread started.");
+            log.info("KafkaTopicReader thread started for {}.", clientId);
         }
 
         private void readToEnd() {
@@ -635,7 +635,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     "Consumer threw RecordTooLargeException. Data has been written that "
                         + "exceeds the default maximum fetch size.", rtle);
             } catch (RuntimeException e) {
-                log.error("KafkaTopicReader thread has died for an unknown reason.", e);
+                log.error("KafkaTopicReader thread for {} has died for an unknown reason.", clientId, e);
                 throw e;
             }
             return count;
@@ -683,7 +683,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         @Override
         public void shutdown() throws InterruptedException {
-            log.debug("Starting shutdown of KafkaTopicReader thread.");
+            log.debug("Starting shutdown of KafkaTopicReader thread for {}.", clientId);
 
             super.initiateShutdown();
             if (consumer != null) {
@@ -693,7 +693,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (consumer != null) {
                 consumer.close();
             }
-            log.info("KafkaTopicReader thread shutdown complete.");
+            log.info("KafkaTopicReader thread shutdown complete for {}.", clientId);
         }
     }
 }

@@ -55,7 +55,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -157,7 +156,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // start the background thread that subscribes to the Kafka topic and applies updates.
         // the thread must be created after the topic has been created.
         this.kafkaTopicReader = new WorkerThread();
-        this.kafkaTopicReader.readToEnd();
+        this.kafkaTopicReader.readToEndOffsets();
         this.kafkaTopicReader.start();
 
         boolean isInitialized = initialized.compareAndSet(false, true);
@@ -165,6 +164,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
+    }
+
+    @Override
+    public void sync() {
+        assertInitialized();
+        localCache.sync();
+        kafkaTopicReader.waitUntilEndOffsets();
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
@@ -495,12 +501,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
      */
     private class WorkerThread extends ShutdownableThread {
 
+        private final ReentrantLock consumerLock;
+        private final Condition runningCondition;
+        private final AtomicBoolean isRunning;
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
         private final Map<Integer, Long> offsetsInTopic = new ConcurrentHashMap<>();
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);
+            consumerLock = new ReentrantLock();
+            runningCondition = consumerLock.newCondition();
+            isRunning = new AtomicBoolean(true);
             offsetUpdateLock = new ReentrantLock();
             offsetReachedThreshold = offsetUpdateLock.newCondition();
 
@@ -541,30 +553,36 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
 
-        private void readToEnd() {
+        private void readToEndOffsets() {
             Set<TopicPartition> assignment = consumer.assignment();
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
             log.trace("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
-            while (!endOffsets.isEmpty()) {
-                Iterator<Entry<TopicPartition, Long>> it = endOffsets.entrySet().iterator();
-                while (it.hasNext()) {
-                    Map.Entry<TopicPartition, Long> entry = it.next();
-                    if (consumer.position(entry.getKey()) >= entry.getValue())
-                        it.remove();
-                    else {
-                        count += poll();
-                        break;
-                    }
-                }
+            while (!hasReadToEndOffsets(endOffsets)) {
+                count += poll();
             }
-            log.info("During initialization, processed {} records from topic {}", count, topic);
+            log.info("During init or sync, processed {} records from topic {}", count, topic);
+        }
+
+        private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets) {
+            endOffsets.entrySet().removeIf(entry -> consumer.position(entry.getKey()) >= entry.getValue());
+            return endOffsets.isEmpty();
         }
 
         @Override
         protected void doWork() {
-            poll();
+            try {
+                consumerLock.lock();
+                while (!isRunning.get()) {
+                    runningCondition.await();
+                }
+                poll();
+            } catch (InterruptedException e) {
+                // ignore
+            } finally {
+                consumerLock.unlock();
+            }
         }
 
         private int poll() {
@@ -628,7 +646,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
                 count = records.count();
             } catch (WakeupException we) {
-                // do nothing because the thread is closing -- see shutdown()
+                // do nothing
             } catch (RecordTooLargeException rtle) {
                 throw new IllegalStateException(
                     "Consumer threw RecordTooLargeException. Data has been written that "
@@ -677,6 +695,23 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
                         + "targetOffset: " + offset + ", offsetReached: " + offsetsInTopic.get(partition)
                         + ", timeout(ms): " + timeout.toMillis());
+            }
+        }
+
+        private void waitUntilEndOffsets() throws CacheException {
+            isRunning.set(false);
+            consumer.wakeup();
+            try {
+                consumerLock.lock();
+                try {
+                    readToEndOffsets();
+                } catch (Exception e) {
+                    log.warn("Could not read to end offsets", e);
+                }
+                isRunning.set(true);
+                runningCondition.signalAll();
+            } finally {
+                consumerLock.unlock();
             }
         }
 

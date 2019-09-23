@@ -201,6 +201,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         openDB();
     }
 
+    @Override
+    public void sync() {
+        // do nothing
+    }
+
     private void validateStoreOpen() {
         if (!open) {
             throw new CacheException("Store " + name + " is currently closed");
@@ -602,6 +607,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         public void init() {
+        }
+
+        public void sync() {
         }
 
         public void flush() {

@@ -59,6 +59,11 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
     }
 
     @Override
+    public void sync() {
+        // do nothing
+    }
+
+    @Override
     public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
         return new InMemoryCache<>(subMap(from, fromInclusive, to, toInclusive));
     }

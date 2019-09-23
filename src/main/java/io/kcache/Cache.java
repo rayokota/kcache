@@ -29,6 +29,11 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
     void init() throws CacheInitializationException;
 
     /**
+     * Syncs (or re-initializes) the cache with the backing store.
+     */
+    void sync();
+
+    /**
      * Returns a view of the portion of this cache whose keys range from
      * {@code fromKey} to {@code toKey}.  If {@code fromKey} and
      * {@code toKey} are equal, the returned cache is empty unless

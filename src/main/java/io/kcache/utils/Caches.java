@@ -48,6 +48,10 @@ public class Caches {
             m.init();
         }
 
+        public void sync() {
+            m.sync();
+        }
+
         public int size() {
             return m.size();
         }

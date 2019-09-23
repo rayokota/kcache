@@ -1,4 +1,4 @@
-# KCache - An In-Memory Cache Backed by Kafka
+# KCache - An In-Memory Cache Backed by Apache Kafka
 
 [![Build Status][travis-shield]][travis-link]
 [![Maven][maven-shield]][maven-link]

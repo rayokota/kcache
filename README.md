@@ -45,7 +45,7 @@ cache.remove("Kafka");
 cache.close();  // shuts down the cache, consumer, and producer
 ```
 
-## Configuration
+## Basic Configuration
 
 KCache has a number of configuration properties that can be specified.
 
@@ -71,6 +71,10 @@ Cache<String, String> cache = new KafkaCache<>(
 cache.init();
 ...
 ```
+
+## Security
+
+KCache supports both SSL authentication and SASL authentication to a secure Kafka cluster.  See the [JavaDoc](https://static.javadoc.io/io.kcache/kcache/2.0.2/io/kcache/KafkaCacheConfig.html) for more information.
 
 ## Using KCache as a Replicated Cache
 

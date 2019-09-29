@@ -54,8 +54,8 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.client.id` - The client ID to use for the internal consumer.  Defaults to `kafka-cache-reader-<topic>`.
 - `kafkacache.topic` - The name of the compacted topic.  Defaults to `_cache`.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
-- `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 60 seconds.
-- `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 500 milliseconds.
+- `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 300 seconds.
+- `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
 
 Configuration properties can be passed as follows:
 

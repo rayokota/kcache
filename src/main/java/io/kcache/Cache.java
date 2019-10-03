@@ -70,14 +70,6 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
     Cache<K, V> subCache(K fromKey, boolean fromInclusive, K toKey, boolean toInclusive);
 
     /**
-     * Returns an iterator over the elements in this collection.  There are no
-     * guarantees concerning the order in which the elements are returned
-     * (unless this collection is an instance of some class that provides a
-     * guarantee).
-     *
-     * @return an <tt>Iterator</tt> over the elements in this collection
-     */
-    /**
      * Returns an iterator over the portion of this cache whose keys range from
      * {@code fromKey} to {@code toKey}.  If {@code fromKey} and
      * {@code toKey} are equal, the returned iterator is empty unless

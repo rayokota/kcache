@@ -41,8 +41,8 @@
         <kafka.scala.version>2.12</kafka.scala.version>
         <guava.version>27.1-jre</guava.version>
         <rocksdb.version>6.2.2</rocksdb.version>
-        <scala.version>2.12.8</scala.version>
-        <zookeeper.version>3.4.14</zookeeper.version>
+        <scala.version>${kafka.scala.version}.8</scala.version>
+        <sl4j.version>1.7.28</sl4j.version>
     </properties>
 
     <dependencies>
@@ -57,24 +57,14 @@
             <version>${kafka.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.zookeeper</groupId>
-            <artifactId>zookeeper</artifactId>
-            <version>${zookeeper.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.rocksdb</groupId>
             <artifactId>rocksdbjni</artifactId>
             <version>${rocksdb.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>2.12.8</version>
-        </dependency>
-        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.26</version>
+            <version>${sl4j.version}</version>
         </dependency>
         <!-- TESTING -->
         <dependency>
@@ -98,6 +88,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>${scala.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk15on</artifactId>
             <version>${bouncycastle.version}</version>
@@ -107,6 +102,12 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>${sl4j.version}</version>
             <scope>test</scope>
         </dependency>
         <!-- To prevent a UniqueResourceException due the same resource existing in both

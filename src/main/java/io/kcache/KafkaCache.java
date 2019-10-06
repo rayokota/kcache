@@ -636,7 +636,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         }
                         updateOffset(record.partition(), record.offset());
                     } catch (Exception se) {
-                        log.error("Failed to add record from the Kafka topic"
+                        log.error("Failed to add record from the Kafka topic "
                             + topic
                             + " to the local cache", se);
                     }

@@ -7,6 +7,7 @@ import io.kcache.KeyValueIterator;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +43,10 @@ public class Caches {
         ConcurrentCache(Cache<K, V> m, Striped<ReadWriteLock> striped) {
             this.m = m;
             this.striped = striped;
+        }
+
+        public Comparator<? super K> comparator() {
+            return m.comparator();
         }
 
         public synchronized void init() {
@@ -112,6 +117,14 @@ public class Caches {
 
         public void clear() {
             throw new UnsupportedOperationException();
+        }
+
+        public K firstKey() {
+            return m.firstKey();
+        }
+
+        public K lastKey() {
+            return m.lastKey();
         }
 
         public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {

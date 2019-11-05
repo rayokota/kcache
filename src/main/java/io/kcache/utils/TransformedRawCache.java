@@ -26,9 +26,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +42,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Cache<byte[], byte[]> rawCache;
+    private final Comparator<K> comparator;
 
     public TransformedRawCache(Serde<K> keySerde,
                                Serde<V> valueSerde,
@@ -47,6 +50,17 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.rawCache = rawCache;
+        Comparator<? super byte[]> rawComparator = rawCache.comparator();
+        this.comparator = rawComparator == null ? null : (k1, k2) -> {
+            byte[] b1 = keySerde.serializer().serialize(null, k1);
+            byte[] b2 = keySerde.serializer().serialize(null, k2);
+            return rawComparator.compare(b1, b2);
+        };
+    }
+
+    @Override
+    public Comparator<? super K> comparator() {
+        return comparator;
     }
 
     @Override
@@ -136,7 +150,7 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     public Set<K> keySet() {
         return Streams.streamOf(all())
             .map(kv -> kv.key)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
     }
 
     @Override
@@ -150,7 +164,18 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     public Set<Entry<K, V>> entrySet() {
         return Streams.streamOf(all())
             .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-            .collect(Collectors.toSet());
+            .collect(Collectors.toCollection(
+                () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
+    }
+
+    @Override
+    public K firstKey() {
+        return keySerde.deserializer().deserialize(null, rawCache.firstKey());
+    }
+
+    @Override
+    public K lastKey() {
+        return keySerde.deserializer().deserialize(null, rawCache.lastKey());
     }
 
     @Override

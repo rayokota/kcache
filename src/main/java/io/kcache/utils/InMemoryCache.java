@@ -16,7 +16,7 @@
 
 package io.kcache.utils;
 
-import com.google.common.collect.ForwardingMap;
+import com.google.common.collect.ForwardingSortedMap;
 import io.kcache.Cache;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
@@ -25,12 +25,13 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * In-memory cache
  */
-public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K, V> {
+public class InMemoryCache<K, V> extends ForwardingSortedMap<K, V> implements Cache<K, V> {
 
     private final NavigableMap<K, V> delegate;
 
@@ -49,7 +50,7 @@ public class InMemoryCache<K, V> extends ForwardingMap<K, V> implements Cache<K,
     }
 
     @Override
-    protected Map<K, V> delegate() {
+    protected SortedMap<K, V> delegate() {
         return delegate;
     }
 

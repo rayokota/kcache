@@ -35,10 +35,8 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
-import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -55,8 +53,10 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -197,6 +197,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public Comparator<? super K> comparator() {
+        return comparator;
+    }
+
+    @Override
     public synchronized void init() {
         // open the DB dir
         openDB();
@@ -304,7 +309,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     public Set<K> keySet() {
         return Streams.streamOf(all())
             .map(kv -> kv.key)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
     }
 
     @Override
@@ -318,7 +323,26 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
     public Set<Map.Entry<K, V>> entrySet() {
         return Streams.streamOf(all())
             .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-            .collect(Collectors.toSet());
+            .collect(Collectors.toCollection(
+                () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
+    }
+
+    @Override
+    public K firstKey() {
+        KeyValueIterator<K, V> iter = all(false);
+        if (!iter.hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return iter.next().key;
+    }
+
+    @Override
+    public K lastKey() {
+        KeyValueIterator<K, V> iter = all(true);
+        if (!iter.hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return iter.next().key;
     }
 
     @Override
@@ -346,8 +370,12 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public KeyValueIterator<K, V> all() {
+        return all(false);
+    }
+
+    private KeyValueIterator<K, V> all(boolean isDescending) {
         validateStoreOpen();
-        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all();
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all(isDescending);
         openIterators.add(rocksDBIterator);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
     }
@@ -453,7 +481,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
                                                byte[] to, boolean toInclusive, boolean isDescending);
 
-        KeyValueIterator<byte[], byte[]> all();
+        KeyValueIterator<byte[], byte[]> all(boolean isDescending);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -535,8 +563,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> all() {
-            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, false);
+        public KeyValueIterator<byte[], byte[]> all(boolean isDescending) {
+            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, isDescending);
         }
 
         @Override
@@ -724,6 +752,14 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         /* ----------------  SortedMap API methods -------------- */
 
+        public Comparator<? super K> comparator() {
+            Comparator<? super K> cmp = m.comparator();
+            if (isDescending)
+                return Collections.reverseOrder(cmp);
+            else
+                return cmp;
+        }
+
         /**
          * Utility to create submaps, where given bounds override
          * unbounded(null) ones and/or are checked against bounded ones.
@@ -768,9 +804,37 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
             return newSubCache(fromKey, fromInclusive, toKey, toInclusive);
         }
 
-        public SubCache<K,V> descendingCache() {
-            return new SubCache<K,V>(m, lo, loInclusive,
-                                     hi, hiInclusive, !isDescending);
+        public SubCache<K, V> descendingCache() {
+            return new SubCache<K, V>(m, lo, loInclusive,
+                hi, hiInclusive, !isDescending);
+        }
+
+        /* ----------------  Relational methods -------------- */
+
+        public K firstKey() {
+            KeyValueIterator<K, V> iter;
+            if (isDescending) {
+                iter = m.range(hi, hiInclusive, lo, loInclusive, true);
+            } else {
+                iter = m.range(lo, loInclusive, hi, hiInclusive, false);
+            }
+            if (!iter.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return iter.next().key;
+        }
+
+        public K lastKey() {
+            KeyValueIterator<K, V> iter;
+            if (isDescending) {
+                iter = m.range(lo, loInclusive, hi, hiInclusive, false);
+            } else {
+                iter = m.range(hi, hiInclusive, lo, loInclusive, true);
+            }
+            if (!iter.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return iter.next().key;
         }
 
         /* ---------------- Submap Views -------------- */
@@ -778,7 +842,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         public Set<K> keySet() {
             return Streams.streamOf(all())
                 .map(kv -> kv.key)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
         }
 
         public Collection<V> values() {
@@ -790,14 +854,15 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         public Set<Map.Entry<K, V>> entrySet() {
             return Streams.streamOf(all())
                 .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(
+                    () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
         }
 
         public KeyValueIterator<K, V> all() {
             if (isDescending) {
-                return m.range(hi, hiInclusive, lo, loInclusive, isDescending);
+                return m.range(hi, hiInclusive, lo, loInclusive, true);
             } else {
-                return m.range(lo, loInclusive, hi, hiInclusive, isDescending);
+                return m.range(lo, loInclusive, hi, hiInclusive, false);
             }
         }
 

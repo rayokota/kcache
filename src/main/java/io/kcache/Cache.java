@@ -19,9 +19,9 @@ package io.kcache;
 import io.kcache.exceptions.CacheInitializationException;
 
 import java.io.Closeable;
-import java.util.Map;
+import java.util.SortedMap;
 
-public interface Cache<K, V> extends Map<K, V>, Closeable {
+public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
 
     /**
      * Initializes the cache.
@@ -115,10 +115,24 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
      *
      * @return a reverse order view of this cache
      */
-    Cache<K,V> descendingCache();
+    Cache<K, V> descendingCache();
 
     /**
      * Flushes the cache.
      */
     void flush();
+
+    // Default methods
+
+    default SortedMap<K, V> subMap(K fromKey, K toKey) {
+        return subCache(fromKey, true, toKey, false);
+    }
+
+    default SortedMap<K, V> headMap(K toKey) {
+        return subCache(null, false, toKey, false);
+    }
+
+    default SortedMap<K, V> tailMap(K fromKey) {
+        return subCache(fromKey, true, null, false);
+    }
 }

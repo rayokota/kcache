@@ -262,5 +262,20 @@ public class RocksDBCacheTest {
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "31")),  // tests seekForPrev
+            true,
+            new Bytes(stringSerializer.serialize(null, "1")),
+            true);
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
     }
 }

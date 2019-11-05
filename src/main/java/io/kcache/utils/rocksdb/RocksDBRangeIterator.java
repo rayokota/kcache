@@ -50,7 +50,11 @@ class RocksDBRangeIterator extends RocksDBIterator {
                 iter.seekToFirst();
             }
         } else {
-            iter.seek(rawFromKey);
+            if (isDescending) {
+                iter.seekForPrev(rawFromKey);
+            } else {
+                iter.seek(rawFromKey);
+            }
         }
         this.fromInclusive = fromInclusive;
         if (rawFromKey != null && !fromInclusive) {

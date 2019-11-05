@@ -17,6 +17,8 @@
 package io.kcache.utils.rocksdb;
 
 import io.kcache.Cache;
+import io.kcache.KeyValue;
+import io.kcache.KeyValueIterator;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -193,5 +195,72 @@ public class RocksDBCacheTest {
 
         assertEquals(3, subCache.size());
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
+
+        Cache<Bytes, byte[]> descendingCache = RocksDBCache.descendingCache();
+        KeyValueIterator<Bytes, byte[]> iter = descendingCache.all();
+        KeyValue<Bytes, byte[]> kv = iter.next();
+        assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("d", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            true,
+            new Bytes(stringSerializer.serialize(null, "2")),
+            true);
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "4")),
+            false,
+            new Bytes(stringSerializer.serialize(null, "2")),
+            true);
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            true,
+            new Bytes(stringSerializer.serialize(null, "1")),
+            false);
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "4")),
+            false,
+            new Bytes(stringSerializer.serialize(null, "1")),
+            false);
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = subCache.descendingCache();
+        iter = subCache.all();
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
     }
 }

@@ -20,6 +20,7 @@ import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import org.rocksdb.RocksIterator;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Set;
 
@@ -38,11 +39,16 @@ class RocksDBRangeIterator extends RocksDBIterator {
                          boolean fromInclusive,
                          byte[] to,
                          boolean toInclusive,
+                         boolean isDescending,
                          Comparator<byte[]> comparator) {
-        super(storeName, iter, openIterators);
+        super(storeName, iter, openIterators, isDescending);
         this.rawFromKey = from;
         if (rawFromKey == null) {
-            iter.seekToFirst();
+            if (isDescending) {
+                iter.seekToLast();
+            } else {
+                iter.seekToFirst();
+            }
         } else {
             iter.seek(rawFromKey);
         }
@@ -53,7 +59,7 @@ class RocksDBRangeIterator extends RocksDBIterator {
 
         this.rawToKey = to;
         this.toInclusive = toInclusive;
-        this.comparator = comparator;
+        this.comparator = isDescending ? Collections.reverseOrder(comparator) : comparator;
     }
 
     @Override

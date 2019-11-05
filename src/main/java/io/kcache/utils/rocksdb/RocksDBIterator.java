@@ -29,6 +29,7 @@ class RocksDBIterator extends AbstractIterator<KeyValue<byte[], byte[]>> impleme
     private final String storeName;
     private final RocksIterator iter;
     private final Set<KeyValueIterator<byte[], byte[]>> openIterators;
+    private final boolean isDescending;
 
     private volatile boolean open = true;
 
@@ -36,10 +37,17 @@ class RocksDBIterator extends AbstractIterator<KeyValue<byte[], byte[]>> impleme
 
     RocksDBIterator(final String storeName,
                     final RocksIterator iter,
-                    final Set<KeyValueIterator<byte[], byte[]>> openIterators) {
+                    final Set<KeyValueIterator<byte[], byte[]>> openIterators,
+                    final boolean isDescending) {
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
+        this.isDescending = isDescending;
+        if (isDescending) {
+            iter.seekToLast();
+        } else {
+            iter.seekToFirst();
+        }
     }
 
     @Override
@@ -56,7 +64,11 @@ class RocksDBIterator extends AbstractIterator<KeyValue<byte[], byte[]>> impleme
             return allDone();
         } else {
             next = getKeyValue();
-            iter.next();
+            if (isDescending) {
+                iter.prev();
+            } else {
+                iter.next();
+            }
             return next;
         }
     }

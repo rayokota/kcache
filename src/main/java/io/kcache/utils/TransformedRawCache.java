@@ -179,6 +179,14 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public Cache<K, V> descendingCache() {
+        return new TransformedRawCache<>(
+            keySerde,
+            valueSerde,
+            rawCache.descendingCache());
+    }
+
+    @Override
     public void flush() {
         rawCache.flush();
     }

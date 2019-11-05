@@ -106,6 +106,18 @@ public interface Cache<K, V> extends Map<K, V>, Closeable {
     KeyValueIterator<K, V> all();
 
     /**
+     * Returns a reverse order view of the mappings contained in this cache.
+     * The descending cache is backed by this cache, so changes to the cache are
+     * reflected in the descending cache, and vice-versa.  If either cache is
+     * modified while an iteration over a collection view of either cache
+     * is in progress (except through the iterator's own {@code remove}
+     * operation), the results of the iteration are undefined.
+     *
+     * @return a reverse order view of this cache
+     */
+    Cache<K,V> descendingCache();
+
+    /**
      * Flushes the cache.
      */
     void flush();

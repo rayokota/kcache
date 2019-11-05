@@ -455,6 +455,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public Cache<K, V> descendingCache() {
+        assertInitialized();
+        return localCache.descendingCache();
+    }
+
+    @Override
     public void flush() {
         assertInitialized();
         localCache.flush();

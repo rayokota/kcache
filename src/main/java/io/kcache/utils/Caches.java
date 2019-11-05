@@ -126,6 +126,10 @@ public class Caches {
             return m.all(); // Must be manually synched by user!
         }
 
+        public Cache<K, V> descendingCache() {
+            return m.descendingCache();
+        }
+
         public void flush() {
             m.flush();
         }

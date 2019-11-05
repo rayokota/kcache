@@ -327,12 +327,17 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        return range(from, fromInclusive, to, toInclusive, false);
+    }
+
+    private KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending) {
         byte[] fromBytes = keySerde.serializer().serialize(null, from);
         byte[] toBytes = keySerde.serializer().serialize(null, to);
 
         validateStoreOpen();
 
-        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive);
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator =
+            dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive, isDescending);
         openIterators.add(rocksDBIterator);
 
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
@@ -340,10 +345,19 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public KeyValueIterator<K, V> all() {
+        return all(false);
+    }
+
+    private KeyValueIterator<K, V> all(boolean isDescending) {
         validateStoreOpen();
-        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all();
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all(isDescending);
         openIterators.add(rocksDBIterator);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
+    }
+
+    @Override
+    public Cache<K, V> descendingCache() {
+        return new SubCache<>(this, null, false, null, false, true);
     }
 
     /**
@@ -439,9 +453,10 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
         byte[] get(final byte[] key) throws RocksDBException;
 
-        KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive);
+        KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
+                                               byte[] to, boolean toInclusive, boolean isDescending);
 
-        KeyValueIterator<byte[], byte[]> all();
+        KeyValueIterator<byte[], byte[]> all(boolean isDescending);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -496,14 +511,18 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive, byte[] to, boolean toInclusive) {
+        public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
+                                                      byte[] to, boolean toInclusive, boolean isDescending) {
             Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<>(keySerde, comparator);
 
-            if (from != null && to != null && bytesComparator.compare(from, to) > 0) {
-                log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
-                return KeyValueIterators.emptyIterator();
+            if (from != null && to != null) {
+                int cmp = bytesComparator.compare(from, to);
+                if ((isDescending && cmp < 0) || (!isDescending && cmp > 0)) {
+                    log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                        + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                        "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    return KeyValueIterators.emptyIterator();
+                }
             }
 
             return new RocksDBRangeIterator(
@@ -514,14 +533,13 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                 fromInclusive,
                 to,
                 toInclusive,
+                isDescending,
                 bytesComparator);
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> all() {
-            final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
-            innerIterWithTimestamp.seekToFirst();
-            return new RocksDBIterator(name, innerIterWithTimestamp, openIterators);
+        public KeyValueIterator<byte[], byte[]> all(boolean isDescending) {
+            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, isDescending);
         }
 
         @Override
@@ -753,6 +771,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
             return newSubCache(fromKey, fromInclusive, toKey, toInclusive);
         }
 
+        public SubCache<K,V> descendingCache() {
+            return new SubCache<K,V>(m, lo, loInclusive,
+                                     hi, hiInclusive, !isDescending);
+        }
+
         /* ---------------- Submap Views -------------- */
 
         public Set<K> keySet() {
@@ -774,20 +797,16 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         public KeyValueIterator<K, V> all() {
-            return m.range(lo, loInclusive, hi, hiInclusive);
+            if (isDescending) {
+                return m.range(hi, hiInclusive, lo, loInclusive, isDescending);
+            } else {
+                return m.range(lo, loInclusive, hi, hiInclusive, isDescending);
+            }
         }
 
         public KeyValueIterator<K, V> range(K fromKey, boolean fromInclusive,
                                             K toKey, boolean toInclusive) {
             Comparator<? super K> cmp = m.comparator;
-            if (isDescending) { // flip senses
-                K tk = fromKey;
-                fromKey = toKey;
-                toKey = tk;
-                boolean ti = fromInclusive;
-                fromInclusive = toInclusive;
-                toInclusive = ti;
-            }
             if (lo != null) {
                 if (fromKey == null) {
                     fromKey = lo;
@@ -808,7 +827,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
                         throw new IllegalArgumentException("key out of range");
                 }
             }
-            return m.range(fromKey, fromInclusive, toKey, toInclusive);
+            return m.range(fromKey, fromInclusive, toKey, toInclusive, isDescending);
         }
     }
 }

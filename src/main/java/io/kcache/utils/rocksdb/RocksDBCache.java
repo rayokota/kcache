@@ -35,6 +35,7 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
+import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
@@ -345,12 +346,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return all(false);
-    }
-
-    private KeyValueIterator<K, V> all(boolean isDescending) {
         validateStoreOpen();
-        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all(isDescending);
+        final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all();
         openIterators.add(rocksDBIterator);
         return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
     }
@@ -456,7 +453,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
                                                byte[] to, boolean toInclusive, boolean isDescending);
 
-        KeyValueIterator<byte[], byte[]> all(boolean isDescending);
+        KeyValueIterator<byte[], byte[]> all();
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -538,8 +535,8 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> all(boolean isDescending) {
-            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, isDescending);
+        public KeyValueIterator<byte[], byte[]> all() {
+            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, false);
         }
 
         @Override

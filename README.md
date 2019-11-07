@@ -21,7 +21,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>2.0.2</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
@@ -45,6 +45,21 @@ cache.remove("Kafka");
 cache.close();  // shuts down the cache, consumer, and producer
 ```
 
+One can also use RocksDB to back the `KafkaCache`:
+
+```java
+Cache<String, String> rocksDBCache =
+    new RocksDBCache<>("rocksdb", "/tmp", Serdes.String(), Serdes.String());
+Properties props = new Properties();
+props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+Cache<String, String> cache = new KafkaCache<>(
+    new KafkaCacheConfig(props),
+    Serdes.String(),  // for serializing/deserializing keys
+    Serdes.String()   // for serializing/deserializing values
+    null,
+    rocksDBCache);
+cache.init();
+```
 ## Basic Configuration
 
 KCache has a number of configuration properties that can be specified.

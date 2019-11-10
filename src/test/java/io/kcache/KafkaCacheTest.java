@@ -36,7 +36,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Before
     public void setup() {
-        log.debug("bootstrapservers = " + bootstrapServers);
+        log.debug("bootstrapservers = {}", bootstrapServers);
     }
 
     @After

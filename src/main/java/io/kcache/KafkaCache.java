@@ -380,11 +380,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         try {
-            log.trace("Sending record to Kafka cache topic: " + producerRecord);
+            log.trace("Sending record to Kafka cache topic: {}", producerRecord);
             Future<RecordMetadata> ack = producer.send(producerRecord);
             RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
-            log.trace("Waiting for the local cache to catch up to offset " + recordMetadata.offset());
+            log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
             int lastWrittenPartition = recordMetadata.partition();
             long lastWrittenOffset = recordMetadata.offset();
             kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
@@ -572,7 +572,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 consumer.seekToBeginning(topicPartitions);
             }
 
-            log.info("Initialized last consumed offset to " + offsetsInTopic);
+            log.info("Initialized last consumed offset to {}", offsetsInTopic);
 
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
@@ -633,11 +633,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                     try {
                         if (cacheUpdateHandler.validateUpdate(messageKey, message)) {
-                            log.trace("Applying update ("
-                                + messageKey
-                                + ","
-                                + message
-                                + ") to the local cache");
+                            log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
                             if (message == null) {
                                 localCache.remove(messageKey);
                             } else {

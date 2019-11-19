@@ -84,6 +84,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private AtomicBoolean initialized = new AtomicBoolean(false);
+    private boolean requireCompact;
     private boolean enableCommit;
     private int initTimeout;
     private int timeout;
@@ -128,6 +129,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (this.clientId == null) {
             this.clientId = "kafka-cache-reader-" + this.topic;
         }
+        this.requireCompact = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG);
         this.enableCommit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
@@ -319,14 +321,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         Config topicConfigs = configs.get(topicResource);
         String retentionPolicy = topicConfigs.get(TopicConfig.CLEANUP_POLICY_CONFIG).value();
         if (!TopicConfig.CLEANUP_POLICY_COMPACT.equals(retentionPolicy)) {
-            log.error("The retention policy of the topic " + topic + " is incorrect. "
+            String message = "The retention policy of the topic " + topic + " is not 'compact'. "
                 + "You must configure the topic to 'compact' cleanup policy to avoid Kafka "
                 + "deleting your data after a week. "
-                + "Refer to Kafka documentation for more details on cleanup policies");
-
-            throw new CacheInitializationException("The retention policy of the topic " + topic
-                + " is incorrect. Expected cleanup.policy to be "
-                + "'compact' but it is " + retentionPolicy);
+                + "Refer to Kafka documentation for more details on cleanup policies.";
+            if (requireCompact) {
+                log.error(message);
+                throw new CacheInitializationException("The retention policy of the topic " + topic
+                    + " is incorrect. Expected cleanup.policy to be "
+                    + "'compact' but it is " + retentionPolicy);
+            } else {
+                log.warn(message);
+            }
         }
     }
 

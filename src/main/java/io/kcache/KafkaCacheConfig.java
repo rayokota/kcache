@@ -67,6 +67,10 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG = "kafkacache.topic.num.partitions";
     public static final int DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS = 1;
     /**
+     * <code>kafkacache.topic.require.compact</code>
+     */
+    public static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG = "kafkacache.topic.require.compact";
+    /**
      * <code>kafkacache.enable.offset.commit</code>
      */
     public static final String KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG = "kafkacache.enable.offset.commit";
@@ -136,6 +140,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "will be the smaller of this value and the number of live Kafka brokers.";
     protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
         "The desired number of partitions factor for the topic.";
+    protected static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC =
+        "Whether to require that the topic is compacted.";
     protected static final String KAFKACACHE_ENABLE_OFFSET_COMMIT_DOC =
         "Whether to enable commit of consumer offsets because the backing cache, such as RocksDB, is persistent.";
     protected static final String KAFKACACHE_INIT_TIMEOUT_DOC =
@@ -215,6 +221,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC
+            )
+            .define(KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG, ConfigDef.Type.BOOLEAN, true,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC
             )
             .define(KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG, ConfigDef.Type.BOOLEAN, false,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_ENABLE_OFFSET_COMMIT_DOC

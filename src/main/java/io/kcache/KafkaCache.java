@@ -85,7 +85,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Cache<K, V> localCache;
     private AtomicBoolean initialized = new AtomicBoolean(false);
     private boolean requireCompact;
-    private boolean enableCommit;
     private int initTimeout;
     private int timeout;
     private String bootstrapBrokers;
@@ -130,7 +129,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             this.clientId = "kafka-cache-reader-" + this.topic;
         }
         this.requireCompact = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG);
-        this.enableCommit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_ENABLE_OFFSET_COMMIT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value) -> {
@@ -667,7 +665,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             + " to the local cache", se);
                     }
                 }
-                if (enableCommit) {
+                if (localCache.isPersistent()) {
                     consumer.commitAsync();
                 }
                 count = records.count();

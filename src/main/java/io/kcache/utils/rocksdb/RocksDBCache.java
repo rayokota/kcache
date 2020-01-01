@@ -129,6 +129,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         };
     }
 
+    @Override
+    public boolean isPersistent() {
+        return true;
+    }
+
     private void openDB() {
         // initialize the default rocksdb options
 

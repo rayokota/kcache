@@ -24,6 +24,15 @@ import java.util.SortedMap;
 public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
 
     /**
+     * Whether the cache is persistent.
+     *
+     * @return whether the cache is persistent
+     */
+    default boolean isPersistent() {
+        return false;
+    }
+
+    /**
      * Initializes the cache.
      */
     void init() throws CacheInitializationException;

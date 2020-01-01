@@ -148,6 +148,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public boolean isPersistent() {
+        return localCache.isPersistent();
+    }
+
+    @Override
     public void init() throws CacheInitializationException {
         if (initialized.get()) {
             throw new CacheInitializationException(

@@ -49,6 +49,10 @@ public class Caches {
             return m.comparator();
         }
 
+        public boolean isPersistent() {
+            return m.isPersistent();
+        }
+
         public synchronized void init() {
             m.init();
         }

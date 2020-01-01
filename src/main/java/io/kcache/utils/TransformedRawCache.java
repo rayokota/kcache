@@ -64,6 +64,11 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public boolean isPersistent() {
+        return rawCache.isPersistent();
+    }
+
+    @Override
     public void init() {
         rawCache.init();
     }

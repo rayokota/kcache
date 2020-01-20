@@ -104,6 +104,11 @@ public class InMemoryCache<K, V> extends ForwardingSortedMap<K, V> implements Ca
         // do nothing
     }
 
+    @Override
+    public void destroy() {
+        // do nothing
+    }
+
     private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<Map.Entry<K, V>> iter;
 

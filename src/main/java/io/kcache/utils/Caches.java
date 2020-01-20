@@ -155,6 +155,10 @@ public class Caches {
             m.close();
         }
 
+        public synchronized void destroy() throws IOException {
+            m.destroy();
+        }
+
         private transient Set<K> keySet;
         private transient Set<Map.Entry<K, V>> entrySet;
         private transient Collection<V> values;

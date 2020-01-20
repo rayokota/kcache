@@ -78,6 +78,10 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.init.timeout.ms</code>
      */
     public static final String KAFKACACHE_INIT_TIMEOUT_CONFIG = "kafkacache.init.timeout.ms";
+    /**
+     * <code>kafkacache.checkpoint.dir</code>
+     */
+    public static final String KAFKACACHE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
 
     public static final String KAFKACACHE_SECURITY_PROTOCOL_CONFIG =
         "kafkacache.security.protocol";
@@ -143,6 +147,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "that stores data.";
     protected static final String KAFKACACHE_TIMEOUT_DOC =
         "The timeout for an operation on the Kafka cache.";
+    protected static final String KAFKACACHE_CHECKPOINT_DIR_DOC =
+        "For persistent caches, the directory in which to store offset checkpoints.";
 
     protected static final String KAFKACACHE_SECURITY_PROTOCOL_DOC =
         "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
@@ -224,6 +230,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TIMEOUT_DOC
+            )
+            .define(KAFKACACHE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_DIR_DOC
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
                 ConfigDef.Importance.LOW, KAFKACACHE_GROUP_ID_DOC

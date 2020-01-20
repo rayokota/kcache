@@ -24,6 +24,7 @@ import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.Streams;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Utils;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -463,6 +464,11 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         cache = null;
     }
 
+    @Override
+    public synchronized void destroy() throws IOException {
+        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
+    }
+
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<byte[], byte[]>> iterators = new HashSet<>(openIterators);
         if (iterators.size() != 0) {
@@ -664,6 +670,9 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         }
 
         public void close() {
+        }
+
+        public void destroy() {
         }
 
         /* ----------------  Utilities -------------- */

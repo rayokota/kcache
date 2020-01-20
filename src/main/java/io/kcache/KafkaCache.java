@@ -21,6 +21,7 @@ import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.ShutdownableThread;
+import io.kcache.utils.OffsetCheckpoint;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -30,6 +31,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -51,11 +53,13 @@ import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -87,11 +91,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private boolean requireCompact;
     private int initTimeout;
     private int timeout;
+    private String checkpointDir;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
     private Consumer<byte[], byte[]> consumer;
     private WorkerThread kafkaTopicReader;
     private KafkaCacheConfig config;
+    private OffsetCheckpoint checkpointFile;
+    private Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -131,6 +138,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.requireCompact = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
+        this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
         this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value) -> {
         };
         this.keySerde = keySerde;
@@ -160,6 +168,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         localCache.init();
 
+        if (localCache.isPersistent()) {
+            try {
+                checkpointFile = new OffsetCheckpoint(checkpointDir);
+                checkpointFileCache.putAll(checkpointFile.read());
+            } catch (IOException e) {
+                throw new CacheInitializationException("Failed to read checkpoints", e);
+            }
+        }
+
         createOrVerifyTopic();
         this.producer = createProducer();
         this.consumer = createConsumer();
@@ -167,7 +184,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // start the background thread that subscribes to the Kafka topic and applies updates.
         // the thread must be created after the topic has been created.
         this.kafkaTopicReader = new WorkerThread();
-        this.kafkaTopicReader.readToEndOffsets();
+        try {
+            this.kafkaTopicReader.readToEndOffsets();
+        } catch (IOException e) {
+            throw new CacheInitializationException("Failed to read to end offsets", e);
+        }
         this.kafkaTopicReader.start();
 
         boolean isInitialized = initialized.compareAndSet(false, true);
@@ -507,7 +528,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.debug("Kafka cache producer shut down for {}", clientId);
         }
         localCache.close();
+        if (checkpointFile != null) {
+            checkpointFile.close();
+        }
         log.info("Kafka cache shut down complete for {}", clientId);
+    }
+
+    @Override
+    public void destroy() throws IOException {
+        assertInitialized();
+        localCache.destroy();
     }
 
     private void assertInitialized() throws CacheException {
@@ -577,7 +607,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .map(p -> new TopicPartition(topic, p.partition()))
                 .collect(Collectors.toList());
             consumer.assign(topicPartitions);
-            if (localCache.isEmpty()) {
+
+            if (localCache.isPersistent()) {
+                for (final TopicPartition topicPartition : topicPartitions) {
+                    final Long checkpoint = checkpointFileCache.get(topicPartition);
+                    if (checkpoint != null) {
+                        consumer.seek(topicPartition, checkpoint);
+                    } else {
+                        consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                    }
+                }
+            } else {
                 consumer.seekToBeginning(topicPartitions);
             }
 
@@ -586,14 +626,24 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
 
-        private void readToEndOffsets() {
+        private void readToEndOffsets() throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
             log.trace("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
             while (!hasReadToEndOffsets(endOffsets)) {
-                count += poll();
+                try {
+                    count += poll();
+                } catch (InvalidOffsetException e) {
+                    if (localCache.isPersistent()) {
+                        localCache.close();
+                        localCache.destroy();
+                        localCache.init();
+                    }
+                    consumer.seekToBeginning(assignment);
+                    count = 0;
+                }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);
         }
@@ -671,7 +721,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                 }
                 if (localCache.isPersistent()) {
-                    consumer.commitAsync();
+                    checkpointOffsets();
                 }
                 count = records.count();
             } catch (WakeupException we) {
@@ -694,6 +744,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 offsetReachedThreshold.signalAll();
             } finally {
                 offsetUpdateLock.unlock();
+            }
+        }
+
+        private void checkpointOffsets() {
+            Map<TopicPartition, Long> offsets = offsetsInTopic.entrySet()
+                .stream()
+                .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
+            checkpointFileCache.putAll(offsets);
+            try {
+                checkpointFile.write(offsets);
+            } catch (final IOException e) {
+                log.warn("Failed to write offset checkpoint file to {}: {}", checkpointFile, e);
             }
         }
 

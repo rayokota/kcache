@@ -19,6 +19,7 @@ package io.kcache;
 import io.kcache.exceptions.CacheInitializationException;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.SortedMap;
 
 public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
@@ -130,6 +131,11 @@ public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
      * Flushes the cache.
      */
     void flush();
+
+    /**
+     * Destroys the cache, if persistent.
+     */
+    void destroy() throws IOException;
 
     // Default methods
 

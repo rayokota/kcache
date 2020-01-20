@@ -225,4 +225,9 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     public void close() throws IOException {
         rawCache.close();
     }
+
+    @Override
+    public void destroy() throws IOException {
+        rawCache.destroy();
+    }
 }

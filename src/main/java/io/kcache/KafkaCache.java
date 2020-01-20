@@ -166,7 +166,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
         }
-        localCache.init();
 
         if (localCache.isPersistent()) {
             try {
@@ -176,6 +175,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw new CacheInitializationException("Failed to read checkpoints", e);
             }
         }
+        localCache.init();
 
         createOrVerifyTopic();
         this.producer = createProducer();

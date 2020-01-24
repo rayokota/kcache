@@ -40,7 +40,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     @After
-    public void teardown() {
+    public void teardown() throws IOException {
         log.debug("Shutting down");
     }
 

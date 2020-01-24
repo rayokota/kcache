@@ -644,6 +644,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         localCache.destroy();
                         localCache.init();
                     }
+                    log.warn("Seeking to beginning due to invalid offset", e);
                     consumer.seekToBeginning(assignment);
                     count = 0;
                 }

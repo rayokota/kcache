@@ -23,6 +23,7 @@ import io.kcache.utils.StringUpdateHandler;
 import io.kcache.utils.rocksdb.RocksDBCache;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
+import org.junit.After;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,15 @@ import static org.junit.Assert.assertEquals;
 public class KafkaRocksDBCacheTest extends KafkaCacheTest {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaRocksDBCacheTest.class);
+
+    @After
+    @Override
+    public void teardown() throws IOException {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp")) {
+            offsetCheckpoint.delete();
+        }
+        super.teardown();
+    }
 
     @Override
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {

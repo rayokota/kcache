@@ -59,9 +59,9 @@ import java.util.regex.Pattern;
 public class OffsetCheckpoint implements Closeable {
     private static final Logger LOG = LoggerFactory.getLogger(OffsetCheckpoint.class);
 
-    private static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+    public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
-    private static final String LOCK_FILE_NAME = ".lock";
+    public static final String LOCK_FILE_NAME = ".lock";
 
     private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 

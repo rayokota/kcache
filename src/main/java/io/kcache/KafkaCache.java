@@ -53,7 +53,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
@@ -174,6 +173,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } catch (IOException e) {
                 throw new CacheInitializationException("Failed to read checkpoints", e);
             }
+            log.info("Successfully read checkpoints");
         }
         localCache.init();
 
@@ -612,12 +612,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 for (final TopicPartition topicPartition : topicPartitions) {
                     final Long checkpoint = checkpointFileCache.get(topicPartition);
                     if (checkpoint != null) {
+                        log.info("Seeking to checkpoint {} for {}", checkpoint, topicPartition);
                         consumer.seek(topicPartition, checkpoint);
                     } else {
+                        log.info("Seeking to beginning for {}", topicPartition);
                         consumer.seekToBeginning(Collections.singletonList(topicPartition));
                     }
                 }
             } else {
+                log.info("Seeking to beginning for all partitions");
                 consumer.seekToBeginning(topicPartitions);
             }
 

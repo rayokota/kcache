@@ -34,7 +34,7 @@ public class OffsetCheckpointTest {
 
     @Test
     public void testReadWrite() throws IOException {
-        try (final OffsetCheckpoint checkpoint = new OffsetCheckpoint("/tmp")) {
+        try (final OffsetCheckpoint checkpoint = new OffsetCheckpoint("/tmp", topic)) {
             final Map<TopicPartition, Long> offsets = new HashMap<>();
             offsets.put(new TopicPartition(topic, 0), 0L);
             offsets.put(new TopicPartition(topic, 1), 1L);
@@ -57,7 +57,7 @@ public class OffsetCheckpointTest {
     @Test
     public void shouldNotWriteCheckpointWhenNoOffsets() throws IOException {
         // we do not need to worry about file name uniqueness since this file should not be created
-        try (final OffsetCheckpoint checkpoint = new OffsetCheckpoint("/tmp")) {
+        try (final OffsetCheckpoint checkpoint = new OffsetCheckpoint("/tmp", topic)) {
 
             checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
 

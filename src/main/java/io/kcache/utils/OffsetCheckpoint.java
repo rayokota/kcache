@@ -72,11 +72,12 @@ public class OffsetCheckpoint implements Closeable {
     private FileChannel channel;
     private FileLock fileLock;
 
-    public OffsetCheckpoint(final String checkpointDir) throws IOException {
-        this.file = new File(checkpointDir, CHECKPOINT_FILE_NAME);
+    public OffsetCheckpoint(final String checkpointDir, String topic) throws IOException {
+        File baseDir = baseDir(checkpointDir, topic);
+        this.file = new File(baseDir, CHECKPOINT_FILE_NAME);
         lock = new Object();
 
-        final File lockFile = new File(checkpointDir, LOCK_FILE_NAME);
+        final File lockFile = new File(baseDir, LOCK_FILE_NAME);
         final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
@@ -85,6 +86,15 @@ public class OffsetCheckpoint implements Closeable {
         }
         this.channel = channel;
         this.fileLock = fileLock;
+    }
+
+    private File baseDir(final String checkpointDir, String topic) throws IOException {
+        final File dir = new File(checkpointDir, topic);
+        if (!dir.exists() && !dir.mkdir()) {
+            throw new IOException(
+                String.format("checkpoint directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+        }
+        return dir;
     }
 
     private FileLock tryLock(final FileChannel channel) throws IOException {

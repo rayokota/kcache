@@ -168,7 +168,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         if (localCache.isPersistent()) {
             try {
-                checkpointFile = new OffsetCheckpoint(checkpointDir);
+                checkpointFile = new OffsetCheckpoint(checkpointDir, topic);
                 checkpointFileCache.putAll(checkpointFile.read());
             } catch (IOException e) {
                 throw new CacheInitializationException("Failed to read checkpoints", e);

@@ -39,10 +39,12 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaRocksDBCacheTest.class);
 
+    private final String topic = KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
+
     @After
     @Override
     public void teardown() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp")) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", topic)) {
             offsetCheckpoint.delete();
         }
         super.teardown();
@@ -50,7 +52,7 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
 
     @Override
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> rocksDBCache = new RocksDBCache<>("cache", "/tmp", Serdes.String(), Serdes.String());
+        Cache<String, String> rocksDBCache = new RocksDBCache<>(topic, "/tmp", Serdes.String(), Serdes.String());
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         KafkaCacheConfig config = new KafkaCacheConfig(props);
@@ -86,8 +88,7 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
             kafkaCache.close();
 
-            final Map<TopicPartition, Long> offsets = Collections.singletonMap(
-                new TopicPartition(KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC, 0), 1L);
+            final Map<TopicPartition, Long> offsets = Collections.singletonMap(new TopicPartition(topic, 0), 1L);
             final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
             assertEquals(result, offsets);
 
@@ -102,14 +103,13 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
             kafkaCache.close();
         }
 
-        final Map<TopicPartition, Long> offsets = Collections.singletonMap(
-            new TopicPartition(KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC, 0), 2L);
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(new TopicPartition(topic, 0), 2L);
         final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
         assertEquals(result, offsets);
     }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp")) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", topic)) {
             return offsetCheckpoint.read();
         }
     }

@@ -677,24 +677,24 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    K messageKey;
                     try {
-                        messageKey = keySerde.deserializer().deserialize(topic, record.key());
-                    } catch (Exception e) {
-                        log.error("Failed to deserialize the key", e);
-                        continue;
-                    }
+                        K messageKey;
+                        try {
+                            messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                        } catch (Exception e) {
+                            log.error("Failed to deserialize the key", e);
+                            continue;
+                        }
 
-                    V message;
-                    try {
-                        message =
-                            record.value() == null ? null
-                                : valueSerde.deserializer().deserialize(topic, record.value());
-                    } catch (Exception e) {
-                        log.error("Failed to deserialize a value", e);
-                        continue;
-                    }
-                    try {
+                        V message;
+                        try {
+                            message =
+                                record.value() == null ? null
+                                    : valueSerde.deserializer().deserialize(topic, record.value());
+                        } catch (Exception e) {
+                            log.error("Failed to deserialize a value", e);
+                            continue;
+                        }
                         if (cacheUpdateHandler.validateUpdate(messageKey, message)) {
                             log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
                             V oldMessage;
@@ -718,11 +718,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 }
                             }
                         }
-                        updateOffset(record.partition(), record.offset());
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic "
                             + topic
                             + " to the local cache", se);
+                    } finally {
+                        updateOffset(record.partition(), record.offset());
                     }
                 }
                 if (localCache.isPersistent()) {

@@ -34,6 +34,7 @@ public interface CacheUpdateHandler<K, V> {
      *
      * @param key   key associated with the data
      * @param value data written to the cache
+     * @param oldValue the previous value associated with key, or null if there was no mapping for key
      */
-    void handleUpdate(K key, V value);
+    void handleUpdate(K key, V value, V oldValue);
 }

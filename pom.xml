@@ -39,7 +39,7 @@
         <bouncycastle.version>1.60</bouncycastle.version>
         <kafka.version>2.4.1</kafka.version>
         <kafka.scala.version>2.12</kafka.scala.version>
-        <guava.version>27.1-jre</guava.version>
+        <guava.version>28.2-jre</guava.version>
         <rocksdb.version>6.3.6</rocksdb.version>
         <scala.version>${kafka.scala.version}.8</scala.version>
         <sl4j.version>1.7.30</sl4j.version>

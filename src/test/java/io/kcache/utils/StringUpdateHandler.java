@@ -30,9 +30,10 @@ public class StringUpdateHandler implements CacheUpdateHandler<String, String> {
      * @param key   key associated with the data
      * @param value data written to the store
      * @param oldValue the previous value associated with key, or null if there was no mapping for key
+     * @param timestamp timestamp
      */
     @Override
-    public void handleUpdate(String key, String value, String oldValue) {
-        log.info("Handle update for ({}, {}, {})", key, value, oldValue);
+    public void handleUpdate(String key, String value, String oldValue, long timestamp) {
+        log.info("Handle update for ({}, {}, {}, {})", key, value, oldValue, timestamp);
     }
 }

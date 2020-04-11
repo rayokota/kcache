@@ -135,6 +135,38 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         return true;
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public Serde<K> getKeySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> getValueSerde() {
+        return valueSerde;
+    }
+
+    protected Set<KeyValueIterator<byte[], byte[]>> getOpenIterators() {
+        return openIterators;
+    }
+
+    protected RocksDB getDB() {
+        return db;
+    }
+
+    protected File getDbDir() {
+        return dbDir;
+    }
+
+    protected WriteOptions getWriteOptions() {
+        return wOptions;
+    }
+
+    protected FlushOptions getFlushOptions() {
+        return fOptions;
+    }
+
     private void openDB() {
         // initialize the default rocksdb options
 
@@ -194,9 +226,15 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
             = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
+        db = open(dbOptions, columnFamilyDescriptors, columnFamilies);
+        dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+    }
+
+    protected RocksDB open(final DBOptions dbOptions,
+                           List<ColumnFamilyDescriptor> columnFamilyDescriptors,
+                           List<ColumnFamilyHandle> columnFamilies) {
         try {
-            db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-            dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+            return RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
         } catch (final RocksDBException e) {
             throw new CacheInitializationException("Error opening store " + name + " at location " + dbDir.toString(), e);
         }
@@ -218,7 +256,7 @@ public class RocksDBCache<K, V> implements Cache<K, V> {
         // do nothing
     }
 
-    private void validateStoreOpen() {
+    protected void validateStoreOpen() {
         if (!open) {
             throw new CacheException("Store " + name + " is currently closed");
         }

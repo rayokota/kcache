@@ -37,7 +37,7 @@
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <bouncycastle.version>1.65</bouncycastle.version>
-        <kafka.version>2.4.1</kafka.version>
+        <kafka.version>2.5.0</kafka.version>
         <kafka.scala.version>2.12</kafka.scala.version>
         <guava.version>28.2-jre</guava.version>
         <rocksdb.version>6.4.6</rocksdb.version>

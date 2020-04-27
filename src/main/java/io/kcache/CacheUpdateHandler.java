@@ -16,6 +16,8 @@
 
 package io.kcache;
 
+import org.apache.kafka.common.TopicPartition;
+
 public interface CacheUpdateHandler<K, V> {
 
     /**
@@ -23,10 +25,12 @@ public interface CacheUpdateHandler<K, V> {
      *
      * @param key   key associated with the data
      * @param value data written to the cache
+     * @param tp topic-partition
+     * @param offset offset
      * @param timestamp timestamp
      * @return whether the update should proceed
      */
-    default boolean validateUpdate(K key, V value, long timestamp) {
+    default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
         return true;
     }
 
@@ -36,7 +40,9 @@ public interface CacheUpdateHandler<K, V> {
      * @param key   key associated with the data
      * @param value data written to the cache
      * @param oldValue the previous value associated with key, or null if there was no mapping for key
+     * @param tp topic-partition
+     * @param offset offset
      * @param timestamp timestamp
      */
-    void handleUpdate(K key, V value, V oldValue, long timestamp);
+    void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 }

@@ -17,6 +17,7 @@
 package io.kcache.utils;
 
 import io.kcache.CacheUpdateHandler;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +34,8 @@ public class StringUpdateHandler implements CacheUpdateHandler<String, String> {
      * @param timestamp timestamp
      */
     @Override
-    public void handleUpdate(String key, String value, String oldValue, long timestamp) {
-        log.info("Handle update for ({}, {}, {}, {})", key, value, oldValue, timestamp);
+    public void handleUpdate(String key, String value, String oldValue,
+                             TopicPartition tp, long offset, long timestamp) {
+        log.info("Handle update for ({}, {}, {}, {}, {}, {})", key, value, oldValue, tp, offset, timestamp);
     }
 }

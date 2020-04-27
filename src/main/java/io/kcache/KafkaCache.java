@@ -138,8 +138,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
-        this.cacheUpdateHandler = cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, ts) -> {
-        };
+        this.cacheUpdateHandler =
+            cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.localCache = localCache;
@@ -695,8 +695,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             log.error("Failed to deserialize a value", e);
                             continue;
                         }
+                        TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+                        long offset = record.offset();
                         long timestamp = record.timestamp();
-                        if (cacheUpdateHandler.validateUpdate(messageKey, message, timestamp)) {
+                        if (cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp)) {
                             log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
                             V oldMessage;
                             if (message == null) {
@@ -704,7 +706,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             } else {
                                 oldMessage = localCache.put(messageKey, message);
                             }
-                            cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, timestamp);
+                            cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
                         } else {
                             if (!localCache.containsKey(messageKey)) {
                                 try {

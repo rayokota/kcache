@@ -41,7 +41,7 @@
         <kafka.scala.version>2.12</kafka.scala.version>
         <guava.version>29.0-jre</guava.version>
         <rocksdb.version>6.8.1</rocksdb.version>
-        <scala.version>${kafka.scala.version}.8</scala.version>
+        <scala.version>2.13.2</scala.version>
         <sl4j.version>1.7.30</sl4j.version>
     </properties>
 

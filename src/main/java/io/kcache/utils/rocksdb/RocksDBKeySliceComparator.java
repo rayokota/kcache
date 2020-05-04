@@ -19,12 +19,13 @@
 package io.kcache.utils.rocksdb;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.rocksdb.AbstractComparator;
 import org.rocksdb.ComparatorOptions;
-import org.rocksdb.Slice;
 
+import java.nio.ByteBuffer;
 import java.util.Comparator;
 
-public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
+public class RocksDBKeySliceComparator<K> extends AbstractComparator {
 
     private final Comparator<byte[]> comparator;
 
@@ -39,7 +40,11 @@ public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
     }
 
     @Override
-    public int compare(Slice slice1, Slice slice2) {
-        return comparator.compare(slice1.data(), slice2.data());
+    public int compare(ByteBuffer buf1, ByteBuffer buf2) {
+        byte[] arr1 = new byte[buf1.remaining()];
+        buf1.get(arr1);
+        byte[] arr2 = new byte[buf2.remaining()];
+        buf2.get(arr2);
+        return comparator.compare(arr1, arr2);
     }
 }

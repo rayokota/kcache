@@ -106,6 +106,8 @@ public class OffsetCheckpoint implements Closeable {
     }
 
     /**
+     * Write the given offsets to the checkpoint file. All offsets should be non-negative.
+     *
      * @throws IOException if any file operation fails with an IO exception
      */
     public void write(final Map<TopicPartition, Long> offsets) throws IOException {
@@ -126,7 +128,14 @@ public class OffsetCheckpoint implements Closeable {
                 writeIntLine(writer, offsets.size());
 
                 for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
-                    writeEntry(writer, entry.getKey(), entry.getValue());
+                    final TopicPartition tp = entry.getKey();
+                    final Long offset = entry.getValue();
+                    if (offset >= 0L) {
+                        writeEntry(writer, tp, offset);
+                    } else {
+                        LOG.error("Received offset={} to write to checkpoint file for {}", offset, tp);
+                        throw new IllegalStateException("Attempted to write a negative offset to the checkpoint file");
+                    }
                 }
 
                 writer.flush();
@@ -141,7 +150,7 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeIntLine(final BufferedWriter writer,
+    static void writeIntLine(final BufferedWriter writer,
                               final int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
@@ -150,7 +159,7 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeEntry(final BufferedWriter writer,
+    static void writeEntry(final BufferedWriter writer,
                             final TopicPartition part,
                             final long offset) throws IOException {
         writer.write(part.topic());
@@ -162,6 +171,8 @@ public class OffsetCheckpoint implements Closeable {
     }
 
     /**
+     * Reads the offsets from the local checkpoint file, skipping any negative offsets it finds.
+     *
      * @throws IOException if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
@@ -183,8 +194,14 @@ public class OffsetCheckpoint implements Closeable {
 
                             final String topic = pieces[0];
                             final int partition = Integer.parseInt(pieces[1]);
+                            final TopicPartition tp = new TopicPartition(topic, partition);
                             final long offset = Long.parseLong(pieces[2]);
-                            offsets.put(new TopicPartition(topic, partition), offset);
+                            if (offset >= 0L) {
+                                offsets.put(tp, offset);
+                            } else {
+                                LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
+                            }
+
                             line = reader.readLine();
                         }
                         if (offsets.size() != expectedSize) {
@@ -205,7 +222,7 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * @throws IOException if file read ended prematurely
      */
-    private int readInt(final BufferedReader reader) throws IOException {
+    static int readInt(final BufferedReader reader) throws IOException {
         final String line = reader.readLine();
         if (line == null) {
             throw new EOFException("File ended prematurely.");

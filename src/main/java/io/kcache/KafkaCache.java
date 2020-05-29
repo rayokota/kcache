@@ -531,6 +531,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (checkpointFile != null) {
             checkpointFile.close();
         }
+        if (cacheUpdateHandler != null) {
+            cacheUpdateHandler.close();
+        }
         log.info("Kafka cache shut down complete for {}", clientId);
     }
 
@@ -729,10 +732,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
+                count = records.count();
                 if (localCache.isPersistent()) {
                     checkpointOffsets();
                 }
-                count = records.count();
+                cacheUpdateHandler.checkpoint(count);
             } catch (WakeupException we) {
                 // do nothing
             } catch (RecordTooLargeException rtle) {

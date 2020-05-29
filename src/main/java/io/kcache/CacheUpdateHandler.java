@@ -18,7 +18,10 @@ package io.kcache;
 
 import org.apache.kafka.common.TopicPartition;
 
-public interface CacheUpdateHandler<K, V> {
+import java.io.Closeable;
+import java.io.IOException;
+
+public interface CacheUpdateHandler<K, V> extends Closeable {
 
     /**
      * Invoked before every new K,V pair written to the cache
@@ -45,4 +48,16 @@ public interface CacheUpdateHandler<K, V> {
      * @param timestamp timestamp
      */
     void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
+
+    /**
+     * Invoked after a batch of updates.
+     *
+     * @param count batch count
+     */
+    default void checkpoint(int count) {
+    }
+
+    @Override
+    default void close() throws IOException {
+    }
 }

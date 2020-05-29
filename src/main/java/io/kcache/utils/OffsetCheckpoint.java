@@ -133,8 +133,7 @@ public class OffsetCheckpoint implements Closeable {
                     if (offset >= 0L) {
                         writeEntry(writer, tp, offset);
                     } else {
-                        LOG.error("Received offset={} to write to checkpoint file for {}", offset, tp);
-                        throw new IllegalStateException("Attempted to write a negative offset to the checkpoint file");
+                        LOG.warn("Received offset={} to write to checkpoint file for {}", offset, tp);
                     }
                 }
 

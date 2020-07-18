@@ -36,7 +36,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
-        <bouncycastle.version>1.65</bouncycastle.version>
+        <bouncycastle.version>1.66</bouncycastle.version>
         <kafka.version>2.4.1</kafka.version>
         <kafka.scala.version>2.12</kafka.scala.version>
         <guava.version>29.0-jre</guava.version>

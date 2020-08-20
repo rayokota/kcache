@@ -65,20 +65,20 @@ public class OffsetCheckpoint implements Closeable {
 
     private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 
-    private static final int VERSION = 0;
-
     private final File file;
     private final Object lock;
     private FileChannel channel;
     private FileLock fileLock;
+    private int version;
 
-    public OffsetCheckpoint(final String checkpointDir, String topic) throws IOException {
+    public OffsetCheckpoint(String checkpointDir, int version, String topic) throws IOException {
         File baseDir = baseDir(checkpointDir, topic);
         this.file = new File(baseDir, CHECKPOINT_FILE_NAME);
         lock = new Object();
 
         final File lockFile = new File(baseDir, LOCK_FILE_NAME);
-        final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        final FileChannel channel =
+            FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
             channel.close();
@@ -86,13 +86,15 @@ public class OffsetCheckpoint implements Closeable {
         }
         this.channel = channel;
         this.fileLock = fileLock;
+        this.version = version;
     }
 
     private File baseDir(final String checkpointDir, String topic) throws IOException {
         final File dir = new File(checkpointDir, topic);
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException(
-                String.format("checkpoint directory [%s] doesn't exist and couldn't be created", dir.getPath()));
+                String.format(
+                    "checkpoint directory [%s] doesn't exist and couldn't be created", dir.getPath()));
         }
         return dir;
     }
@@ -123,8 +125,8 @@ public class OffsetCheckpoint implements Closeable {
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
             try (final BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-                writeIntLine(writer, VERSION);
+                new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                writeIntLine(writer, version);
                 writeIntLine(writer, offsets.size());
 
                 for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
@@ -149,8 +151,10 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    static void writeIntLine(final BufferedWriter writer,
-                              final int number) throws IOException {
+    static void writeIntLine(
+        final BufferedWriter writer,
+        final int number
+    ) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
@@ -158,9 +162,11 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    static void writeEntry(final BufferedWriter writer,
-                            final TopicPartition part,
-                            final long offset) throws IOException {
+    static void writeEntry(
+        final BufferedWriter writer,
+        final TopicPartition part,
+        final long offset
+    ) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
         writer.write(Integer.toString(part.partition()));
@@ -172,49 +178,49 @@ public class OffsetCheckpoint implements Closeable {
     /**
      * Reads the offsets from the local checkpoint file, skipping any negative offsets it finds.
      *
-     * @throws IOException if any file operation fails with an IO exception
+     * @throws IOException              if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
             try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
-                final int version = readInt(reader);
-                switch (version) {
-                    case 0:
-                        final int expectedSize = readInt(reader);
-                        final Map<TopicPartition, Long> offsets = new HashMap<>();
-                        String line = reader.readLine();
-                        while (line != null) {
-                            final String[] pieces = WHITESPACE_MINIMUM_ONCE.split(line);
-                            if (pieces.length != 3) {
-                                throw new IOException(
-                                    String.format("Malformed line in offset checkpoint file: '%s'.", line));
-                            }
-
-                            final String topic = pieces[0];
-                            final int partition = Integer.parseInt(pieces[1]);
-                            final TopicPartition tp = new TopicPartition(topic, partition);
-                            final long offset = Long.parseLong(pieces[2]);
-                            if (offset >= 0L) {
-                                offsets.put(tp, offset);
-                            } else {
-                                LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
-                            }
-
-                            line = reader.readLine();
-                        }
-                        if (offsets.size() != expectedSize) {
+                final int oldVersion = readInt(reader);
+                if (oldVersion == version) {
+                    final int expectedSize = readInt(reader);
+                    final Map<TopicPartition, Long> offsets = new HashMap<>();
+                    String line = reader.readLine();
+                    while (line != null) {
+                        final String[] pieces = WHITESPACE_MINIMUM_ONCE.split(line);
+                        if (pieces.length != 3) {
                             throw new IOException(
-                                String.format("Expected %d entries but found only %d", expectedSize, offsets.size()));
+                                String.format("Malformed line in offset checkpoint file: '%s'.", line));
                         }
-                        return offsets;
 
-                    default:
-                        throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
+                        final String topic = pieces[0];
+                        final int partition = Integer.parseInt(pieces[1]);
+                        final TopicPartition tp = new TopicPartition(topic, partition);
+                        final long offset = Long.parseLong(pieces[2]);
+                        if (offset >= 0L) {
+                            offsets.put(tp, offset);
+                        } else {
+                            LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
+                        }
+
+                        line = reader.readLine();
+                    }
+                    if (offsets.size() != expectedSize) {
+                        throw new IOException(
+                            String.format(
+                                "Expected %d entries but found only %d", expectedSize, offsets.size()));
+                    }
+                    return offsets;
+                } else {
+                    LOG.warn("Old offset checkpoint version: " + oldVersion);
                 }
             } catch (final NoSuchFileException e) {
-                return Collections.emptyMap();
+                // ignore
             }
+            return Collections.emptyMap();
         }
     }
 

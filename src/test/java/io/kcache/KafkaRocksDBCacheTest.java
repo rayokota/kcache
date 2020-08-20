@@ -44,7 +44,7 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
     @After
     @Override
     public void teardown() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", topic)) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", 0, topic)) {
             offsetCheckpoint.delete();
         }
         super.teardown();
@@ -109,7 +109,7 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
     }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", topic)) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", 0, topic)) {
             return offsetCheckpoint.read();
         }
     }

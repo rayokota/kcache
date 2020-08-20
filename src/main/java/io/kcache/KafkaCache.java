@@ -766,7 +766,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
             checkpointFileCache.putAll(offsets);
             try {
-                checkpointFile.write(offsets);
+                checkpointFile.write(checkpointFileCache);
             } catch (final IOException e) {
                 log.warn("Failed to write offset checkpoint file to {}: {}", checkpointFile, e);
             }

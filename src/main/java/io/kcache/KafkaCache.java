@@ -733,10 +733,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                 }
                 count = records.count();
+                cacheUpdateHandler.checkpoint(count);
                 if (localCache.isPersistent()) {
                     checkpointOffsets();
                 }
-                cacheUpdateHandler.checkpoint(count);
             } catch (WakeupException we) {
                 // do nothing
             } catch (RecordTooLargeException rtle) {

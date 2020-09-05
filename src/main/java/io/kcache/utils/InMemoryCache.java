@@ -21,12 +21,13 @@ import io.kcache.Cache;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.SortedMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.TreeMap;
 
 /**
  * In-memory cache
@@ -37,12 +38,12 @@ public class InMemoryCache<K, V> extends ForwardingSortedMap<K, V> implements Ca
 
     public InMemoryCache() {
         // Use a concurrent data structure to ensure fail-safe iterators
-        this.delegate = new ConcurrentSkipListMap<>();
+        this.delegate = Collections.synchronizedNavigableMap(new TreeMap<>());
     }
 
     public InMemoryCache(Comparator<? super K> comparator) {
         // Use a concurrent data structure to ensure fail-safe iterators
-        this.delegate = new ConcurrentSkipListMap<>(comparator);
+        this.delegate = Collections.synchronizedNavigableMap(new TreeMap<>(comparator));
     }
 
     public InMemoryCache(NavigableMap<K, V> delegate) {

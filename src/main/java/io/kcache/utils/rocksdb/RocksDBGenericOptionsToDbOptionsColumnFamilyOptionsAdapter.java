@@ -183,7 +183,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public Options setComparator(final AbstractComparator comparator) {
+    public Options setComparator(final AbstractComparator<? extends AbstractSlice<?>> comparator) {
         columnFamilyOptions.setComparator(comparator);
         return this;
     }

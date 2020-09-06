@@ -27,7 +27,9 @@ import io.kcache.utils.StringUpdateHandler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,12 +44,15 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaRocksDBCacheTest.class);
 
+    @Rule
+    public final TemporaryFolder dir = new TemporaryFolder();
+
     private final String topic = KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
 
     @After
     @Override
     public void teardown() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", 0, topic)) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(dir.getRoot().toString(), 0, topic)) {
             offsetCheckpoint.delete();
         }
         super.teardown();
@@ -55,9 +60,10 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
 
     @Override
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> rocksDBCache = new RocksDBCache<>(topic, "/tmp", Serdes.String(), Serdes.String());
+        Cache<String, String> rocksDBCache = new RocksDBCache<>(topic, dir.getRoot().toString(), Serdes.String(), Serdes.String());
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG, dir.getRoot().toString());
         KafkaCacheConfig config = new KafkaCacheConfig(props);
         Cache<String, String> kafkaCache = Caches.concurrentCache(
             new KafkaCache<>(config,
@@ -112,7 +118,7 @@ public class KafkaRocksDBCacheTest extends KafkaCacheTest {
     }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint("/tmp", 0, topic)) {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(dir.getRoot().toString(), 0, topic)) {
             return offsetCheckpoint.read();
         }
     }

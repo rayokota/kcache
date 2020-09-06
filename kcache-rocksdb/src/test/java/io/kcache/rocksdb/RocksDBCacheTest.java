@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import io.kcache.Cache;
 import io.kcache.KeyValue;
@@ -25,14 +25,14 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.rules.TemporaryFolder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -41,7 +41,9 @@ public class RocksDBCacheTest {
     private static boolean enableBloomFilters = false;
     private final static String DB_NAME = "db-name";
 
-    private File dir;
+    @Rule
+    public final TemporaryFolder dir = new TemporaryFolder();
+
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
@@ -49,12 +51,11 @@ public class RocksDBCacheTest {
 
     @Before
     public void setUp() {
-        dir = TestUtils.tempDirectory();
         RocksDBCache = getRocksDBCache();
     }
 
     RocksDBCache<Bytes, byte[]> getRocksDBCache() {
-        return new RocksDBCache<>(DB_NAME, dir.getAbsolutePath(), Serdes.Bytes(), Serdes.ByteArray());
+        return new RocksDBCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
     }
 
     @After

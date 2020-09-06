@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package io.kcache;
+package io.kcache.rocksdb;
 
+import io.kcache.Cache;
+import io.kcache.KafkaCache;
+import io.kcache.KafkaCacheConfig;
+import io.kcache.KafkaCacheTest;
 import io.kcache.exceptions.CacheException;
 import io.kcache.utils.Caches;
 import io.kcache.utils.OffsetCheckpoint;
 import io.kcache.utils.StringUpdateHandler;
-import io.kcache.utils.rocksdb.RocksDBCache;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.After;

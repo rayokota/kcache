@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.rocksdb.ComparatorOptions;
@@ -28,7 +28,7 @@ public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
 
     private final Comparator<byte[]> comparator;
 
-    public RocksDBKeySliceComparator(Serde<K> keySerde, Comparator<K> keyComparator) {
+    public RocksDBKeySliceComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
         super(new ComparatorOptions());
         this.comparator = new RocksDBKeyComparator<>(keySerde, keyComparator);
     }

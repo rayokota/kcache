@@ -16,30 +16,26 @@
  * limitations under the License.
  */
 
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.rocksdb.ComparatorOptions;
-import org.rocksdb.Slice;
 
 import java.util.Comparator;
 
-public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
+public class RocksDBKeyComparator<K> implements Comparator<byte[]> {
 
-    private final Comparator<byte[]> comparator;
+    private final Serde<K> keySerde;
+    private final Comparator<? super K> keyComparator;
 
-    public RocksDBKeySliceComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
-        super(new ComparatorOptions());
-        this.comparator = new RocksDBKeyComparator<>(keySerde, keyComparator);
+    public RocksDBKeyComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
+        this.keySerde = keySerde;
+        this.keyComparator = keyComparator;
     }
 
     @Override
-    public String name() {
-        return getClass().getName();
-    }
-
-    @Override
-    public int compare(Slice slice1, Slice slice2) {
-        return comparator.compare(slice1.data(), slice2.data());
+    public int compare(byte[] b1, byte[] b2) {
+        K key1 = keySerde.deserializer().deserialize(null, b1);
+        K key2 = keySerde.deserializer().deserialize(null, b2);
+        return keyComparator.compare(key1, key2);
     }
 }

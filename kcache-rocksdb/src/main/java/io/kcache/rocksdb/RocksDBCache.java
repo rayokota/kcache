@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValueIterator;

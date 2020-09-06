@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import org.rocksdb.AbstractComparator;
-import org.rocksdb.AbstractSlice;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.Cache;

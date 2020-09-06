@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import io.kcache.Cache;
 import io.kcache.KeyValue;
@@ -30,7 +30,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.rules.TemporaryFolder;

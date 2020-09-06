@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.kcache.utils.rocksdb;
+package io.kcache.rocksdb;
 
 import io.kcache.Cache;
 import io.kcache.KafkaCache;

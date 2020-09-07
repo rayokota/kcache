@@ -24,6 +24,7 @@ import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.KeyBufferComparator;
+import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
 import io.kcache.utils.Streams;
 import java.io.File;
@@ -91,11 +92,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
                      Serde<K> keySerde,
                      Serde<V> valueSerde,
                      Comparator<K> comparator) {
-        super(comparator != null ? comparator : (k1, k2) -> {
-            byte[] b1 = keySerde.serializer().serialize(null, k1);
-            byte[] b2 = keySerde.serializer().serialize(null, k2);
-            return BYTES_COMPARATOR.compare(b1, b2);
-        });
+        super(comparator != null ? comparator : new KeyComparator<>(keySerde, BYTES_COMPARATOR));
         this.name = name;
         this.parentDir = parentDir;
         this.rootDir = rootDir;

@@ -18,17 +18,15 @@
 
 package io.kcache.utils;
 
+import java.io.Serializable;
 import java.util.Comparator;
 import org.apache.kafka.common.serialization.Serde;
 
-public class KeyComparator<K> implements Comparator<K> {
+public class KeyComparator<K> implements Comparator<K>, Serializable {
+    private static final long serialVersionUID = -6821331368183556503L;
 
     private Serde<K> keySerde;
     private Comparator<byte[]> keyComparator;
-
-    // For serialization
-    public KeyComparator() {
-    }
 
     public KeyComparator(Serde<K> keySerde, Comparator<byte[]> keyComparator) {
         this.keySerde = keySerde;

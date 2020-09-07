@@ -24,9 +24,12 @@ import com.esotericsoftware.kryo.io.Output;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Comparator;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 
-public class ComparatorWrapper implements Comparator<byte[]>, Serializable {
+public class SerdeWrapper<T> implements Serde<T>, Serializable {
+    private static final long serialVersionUID = -302623791968470800L;
 
     private static final Kryo kryo = new Kryo();
 
@@ -34,22 +37,27 @@ public class ComparatorWrapper implements Comparator<byte[]>, Serializable {
         kryo.setRegistrationRequired(false);
     }
 
-    private Comparator<byte[]> comparator;
+    private Serde<T> serde;
 
-    public ComparatorWrapper(Comparator<byte[]> comparator) {
-        this.comparator = comparator;
+    public SerdeWrapper(Serde<T> serde) {
+        this.serde = serde;
     }
 
     @Override
-    public int compare(byte[] b1, byte[] b2) {
-        return comparator.compare(b1, b2);
+    public Serializer<T> serializer() {
+        return serde.serializer();
+    }
+
+    @Override
+    public Deserializer<T> deserializer() {
+        return serde.deserializer();
     }
 
     private void writeObject(java.io.ObjectOutputStream stream)
         throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream(32);
         Output output = new Output(baos);
-        kryo.writeClassAndObject(output, comparator);
+        kryo.writeClassAndObject(output, serde);
         output.close();
         stream.write(baos.toByteArray());
     }
@@ -58,6 +66,6 @@ public class ComparatorWrapper implements Comparator<byte[]>, Serializable {
     private void readObject(java.io.ObjectInputStream stream)
         throws IOException, ClassNotFoundException {
         Input input = new Input(stream);
-        comparator = (Comparator<byte[]>) kryo.readClassAndObject(input);
+        serde = (Serde<T>) kryo.readClassAndObject(input);
     }
 }

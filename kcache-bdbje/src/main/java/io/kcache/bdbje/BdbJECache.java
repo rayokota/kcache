@@ -18,6 +18,7 @@ package io.kcache.bdbje;
 
 import com.google.common.primitives.SignedBytes;
 import com.sleepycat.je.Cursor;
+import com.sleepycat.je.CursorConfig;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseEntry;
@@ -91,7 +92,9 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                       Serde<K> keySerde,
                       Serde<V> valueSerde,
                       Comparator<K> comparator) {
-        super(comparator != null ? comparator : new KeyComparator<>(keySerde, BYTES_COMPARATOR));
+        super(comparator != null
+            ? comparator
+            : new KeyComparator<>(new SerdeWrapper<>(keySerde), BYTES_COMPARATOR));
         this.name = name;
         this.parentDir = parentDir;
         this.rootDir = rootDir;
@@ -122,8 +125,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
 
             DatabaseConfig dbConfig = new DatabaseConfig();
             dbConfig.setAllowCreate(true);
-            dbConfig.setBtreeComparator(
-                new ComparatorWrapper(new KeyBytesComparator<>(keySerde, comparator())));
+            dbConfig.setBtreeComparator(new KeyBytesComparator<>(new SerdeWrapper<K>(keySerde), comparator()));
             dbConfig.setKeyPrefixing(true);
             db = env.openDatabase(null, name, dbConfig);
         } catch (final Exception e) {
@@ -194,7 +196,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
         byte[] fromBytes = keySerde.serializer().serialize(null, from);
         DatabaseEntry dbKey = new DatabaseEntry(fromBytes);
         DatabaseEntry dbValue = new DatabaseEntry();
-        Cursor cursor = db.openCursor(null, null);
+        Cursor cursor = db.openCursor(null, CursorConfig.READ_UNCOMMITTED); // avoid read locks
 
         Comparator<? super K> comparator = isDescending
             ? Collections.reverseOrder(comparator())
@@ -291,7 +293,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
         validateStoreOpen();
         DatabaseEntry dbKey = new DatabaseEntry();
         DatabaseEntry dbValue = new DatabaseEntry();
-        Cursor cursor = db.openCursor(null, null);
+        Cursor cursor = db.openCursor(null, CursorConfig.READ_UNCOMMITTED); // avoid read locks
 
         KeyValueIterator<K, V> iter = new KeyValueIterator<K, V>() {
             private OperationStatus status;

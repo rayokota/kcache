@@ -200,6 +200,7 @@ public abstract class PersistentCacheTest {
             true,
             new Bytes(stringSerializer.serialize(null, "2")),
             true);
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
@@ -213,6 +214,7 @@ public abstract class PersistentCacheTest {
             false,
             new Bytes(stringSerializer.serialize(null, "2")),
             true);
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
@@ -226,6 +228,7 @@ public abstract class PersistentCacheTest {
             true,
             new Bytes(stringSerializer.serialize(null, "1")),
             false);
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
@@ -239,6 +242,7 @@ public abstract class PersistentCacheTest {
             false,
             new Bytes(stringSerializer.serialize(null, "1")),
             false);
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
@@ -248,6 +252,7 @@ public abstract class PersistentCacheTest {
         assertEquals("b", stringDeserializer.deserialize(null, kv.value));
 
         subCache = subCache.descendingCache();
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
@@ -262,6 +267,7 @@ public abstract class PersistentCacheTest {
             true,
             new Bytes(stringSerializer.serialize(null, "1")),
             true);
+        iter.close();
         iter = subCache.all();
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
@@ -270,5 +276,6 @@ public abstract class PersistentCacheTest {
         assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("b", stringDeserializer.deserialize(null, kv.value));
 
+        iter.close();
     }
 }

@@ -37,9 +37,11 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serde;
@@ -62,6 +64,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     private final String rootDir;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
+    private final Set<KeyValueIterator<K, V>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     private File dbDir;
     private Environment env;
@@ -205,7 +208,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
             return cmp < 0 || (cmp == 0 && toInclusive);
         } : kv -> true;
 
-        return new KeyValueIterator<K, V>() {
+        KeyValueIterator<K, V> iter = new KeyValueIterator<K, V>() {
             private OperationStatus status;
             private KeyValue<K, V> current;
 
@@ -270,6 +273,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
 
             @Override
             public void close() {
+                openIterators.remove(this);
                 cursor.close();
             }
 
@@ -278,6 +282,8 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
+        openIterators.add(iter);
+        return iter;
     }
 
     @Override
@@ -287,7 +293,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
         DatabaseEntry dbValue = new DatabaseEntry();
         Cursor cursor = db.openCursor(null, null);
 
-        return new KeyValueIterator<K, V>() {
+        KeyValueIterator<K, V> iter = new KeyValueIterator<K, V>() {
             private OperationStatus status;
             private KeyValue<K, V> current;
 
@@ -338,6 +344,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
 
             @Override
             public void close() {
+                openIterators.remove(this);
                 cursor.close();
             }
 
@@ -346,6 +353,8 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
+        openIterators.add(iter);
+        return iter;
     }
 
     @Override
@@ -359,6 +368,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     @Override
     protected void closeDB() {
         try {
+            closeOpenIterators();
             if (db != null) {
                 db.close();
             }
@@ -369,6 +379,16 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
             env = null;
         } catch (Exception e) {
             log.warn("Error during close", e);
+        }
+    }
+
+    private void closeOpenIterators() {
+        final HashSet<KeyValueIterator<K, V>> iterators = new HashSet<>(openIterators);
+        if (iterators.size() != 0) {
+            log.warn("Closing {} open iterators for store {}", iterators.size(), name);
+            for (final KeyValueIterator<K, V> iterator : iterators) {
+                iterator.close();
+            }
         }
     }
 

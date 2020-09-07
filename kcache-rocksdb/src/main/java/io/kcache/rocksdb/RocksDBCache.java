@@ -330,11 +330,6 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         cache = null;
     }
 
-    @Override
-    public synchronized void destroy() throws IOException {
-        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
-    }
-
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<byte[], byte[]>> iterators = new HashSet<>(openIterators);
         if (iterators.size() != 0) {
@@ -343,6 +338,11 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
                 iterator.close();
             }
         }
+    }
+
+    @Override
+    public synchronized void destroy() throws IOException {
+        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
     }
 
     interface RocksDBAccessor {

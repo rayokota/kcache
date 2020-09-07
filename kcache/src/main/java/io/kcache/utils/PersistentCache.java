@@ -17,8 +17,11 @@
 package io.kcache.utils;
 
 import io.kcache.Cache;
+import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheException;
+import java.util.AbstractMap.SimpleEntry;
+import java.util.ArrayList;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,42 +121,57 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
 
     @Override
     public Set<K> keySet() {
-        return Streams.streamOf(all())
-            .map(kv -> kv.key)
-            .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
+        Set<K> result = new TreeSet<>(comparator());
+        try (KeyValueIterator<K, V> iter = all()) {
+            while (iter.hasNext()) {
+                result.add(iter.next().key);
+            }
+        }
+        return result;
     }
 
     @Override
     public Collection<V> values() {
-        return Streams.streamOf(all())
-            .map(kv -> kv.value)
-            .collect(Collectors.toList());
+        Collection<V> result = new ArrayList<>();
+        try (KeyValueIterator<K, V> iter = all()) {
+            while (iter.hasNext()) {
+                result.add(iter.next().value);
+            }
+        }
+        return result;
     }
 
     @Override
     public Set<Entry<K, V>> entrySet() {
-        return Streams.streamOf(all())
-            .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-            .collect(Collectors.toCollection(
-                () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
+        Set<Entry<K, V>> result =
+            new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()));
+        try (KeyValueIterator<K, V> iter = all()) {
+            while (iter.hasNext()) {
+                KeyValue<K, V> kv = iter.next();
+                result.add(new SimpleEntry<>(kv.key, kv.value));
+            }
+        }
+        return result;
     }
 
     @Override
     public K firstKey() {
-        KeyValueIterator<K, V> iter = all(false);
-        if (!iter.hasNext()) {
-            throw new NoSuchElementException();
+        try (KeyValueIterator<K, V> iter = all(false)) {
+            if (!iter.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return iter.next().key;
         }
-        return iter.next().key;
     }
 
     @Override
     public K lastKey() {
-        KeyValueIterator<K, V> iter = all(true);
-        if (!iter.hasNext()) {
-            throw new NoSuchElementException();
+        try (KeyValueIterator<K, V> iter = all(true)) {
+            if (!iter.hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return iter.next().key;
         }
-        return iter.next().key;
     }
 
     @Override
@@ -437,22 +455,35 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         /* ---------------- Submap Views -------------- */
 
         public Set<K> keySet() {
-            return Streams.streamOf(all())
-                .map(kv -> kv.key)
-                .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
+            Set<K> result = new TreeSet<>(comparator());
+            try (KeyValueIterator<K, V> iter = all()) {
+                while (iter.hasNext()) {
+                    result.add(iter.next().key);
+                }
+            }
+            return result;
         }
 
         public Collection<V> values() {
-            return Streams.streamOf(all())
-                .map(kv -> kv.value)
-                .collect(Collectors.toList());
+            Collection<V> result = new ArrayList<>();
+            try (KeyValueIterator<K, V> iter = all()) {
+                while (iter.hasNext()) {
+                    result.add(iter.next().value);
+                }
+            }
+            return result;
         }
 
         public Set<Entry<K, V>> entrySet() {
-            return Streams.streamOf(all())
-                .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-                .collect(Collectors.toCollection(
-                    () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
+            Set<Entry<K, V>> result =
+                new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()));
+            try (KeyValueIterator<K, V> iter = all()) {
+                while (iter.hasNext()) {
+                    KeyValue<K, V> kv = iter.next();
+                    result.add(new SimpleEntry<>(kv.key, kv.value));
+                }
+            }
+            return result;
         }
 
         public KeyValueIterator<K, V> all() {

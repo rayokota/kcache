@@ -4,7 +4,7 @@
     <parent>
         <artifactId>kcache-parent</artifactId>
         <groupId>io.kcache</groupId>
-        <version>3.2.4-SNAPSHOT</version>
+        <version>3.3.0</version>
     </parent>
 
     <groupId>io.kcache</groupId>

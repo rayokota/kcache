@@ -74,7 +74,7 @@ class LmdbIterator implements KeyValueIterator<byte[], byte[]> {
 
     @Override
     public void remove() {
-        throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
+        throw new UnsupportedOperationException("LMDB iterator does not support remove()");
     }
 
     @Override

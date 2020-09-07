@@ -131,6 +131,36 @@ public abstract class PersistentCacheTest {
         cache.putAll(entries);
         cache.flush();
 
+        KeyValueIterator<Bytes, byte[]> iter = cache.all();
+        KeyValue<Bytes, byte[]> kv = iter.next();
+        assertEquals("1", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("a", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("d", stringDeserializer.deserialize(null, kv.value));
+        iter.close();
+
+        iter = cache.descendingCache().all();
+        kv = iter.next();
+        assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("d", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+        kv = iter.next();
+        assertEquals("1", stringDeserializer.deserialize(null, kv.key.get()));
+        assertEquals("a", stringDeserializer.deserialize(null, kv.value));
+        iter.close();
+
         Cache<Bytes, byte[]> subCache = cache.subCache(
             new Bytes(stringSerializer.serialize(null, "2")),
             true,
@@ -190,8 +220,8 @@ public abstract class PersistentCacheTest {
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
 
         Cache<Bytes, byte[]> descendingCache = cache.descendingCache();
-        KeyValueIterator<Bytes, byte[]> iter = descendingCache.all();
-        KeyValue<Bytes, byte[]> kv = iter.next();
+        iter = descendingCache.all();
+        kv = iter.next();
         assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("d", stringDeserializer.deserialize(null, kv.value));
 
@@ -260,7 +290,6 @@ public abstract class PersistentCacheTest {
         kv = iter.next();
         assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("c", stringDeserializer.deserialize(null, kv.value));
-
 
         subCache = descendingCache.subCache(
             new Bytes(stringSerializer.serialize(null, "31")),  // tests seekForPrev

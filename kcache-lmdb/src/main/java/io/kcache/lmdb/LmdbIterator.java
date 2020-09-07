@@ -19,7 +19,6 @@ package io.kcache.lmdb;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import java.nio.ByteBuffer;
-import java.util.Comparator;
 import java.util.Iterator;
 import org.lmdbjava.CursorIterable;
 import org.lmdbjava.CursorIterable.KeyVal;

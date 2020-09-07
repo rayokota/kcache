@@ -21,24 +21,24 @@ package io.kcache.utils;
 import java.util.Comparator;
 import org.apache.kafka.common.serialization.Serde;
 
-public class KeyBytesComparator<K> implements Comparator<byte[]> {
+public class KeyComparator<K> implements Comparator<K> {
 
     private Serde<K> keySerde;
-    private Comparator<? super K> keyComparator;
+    private Comparator<byte[]> keyComparator;
 
     // For serialization
-    public KeyBytesComparator() {
+    public KeyComparator() {
     }
 
-    public KeyBytesComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
+    public KeyComparator(Serde<K> keySerde, Comparator<byte[]> keyComparator) {
         this.keySerde = keySerde;
         this.keyComparator = keyComparator;
     }
 
     @Override
-    public int compare(byte[] b1, byte[] b2) {
-        K key1 = keySerde.deserializer().deserialize(null, b1);
-        K key2 = keySerde.deserializer().deserialize(null, b2);
-        return keyComparator.compare(key1, key2);
+    public int compare(K k1, K k2) {
+        byte[] b1 = keySerde.serializer().serialize(null, k1);
+        byte[] b2 = keySerde.serializer().serialize(null, k2);
+        return keyComparator.compare(b1, b2);
     }
 }

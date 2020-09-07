@@ -34,6 +34,7 @@
 
     <modules>
         <module>kcache</module>
+        <module>kcache-bdbje</module>
         <module>kcache-lmdb</module>
         <module>kcache-rocksdb</module>
     </modules>
@@ -48,6 +49,8 @@
         <kafka.version>2.6.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <guava.version>29.0-jre</guava.version>
+        <kryo.version>5.0.0-RC9</kryo.version>
+        <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.1</lmdb.version>
         <rocksdb.version>6.7.3</rocksdb.version>
         <scala.version>${kafka.scala.version}.3</scala.version>
@@ -66,15 +69,25 @@
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
             </dependency>
-	    <dependency>
-	        <groupId>org.lmdbjava</groupId>
-	        <artifactId>lmdbjava</artifactId>
-	        <version>${lmdb.version}</version>
-	    </dependency>
+            <dependency>
+                <groupId>com.sleepycat</groupId>
+                <artifactId>je</artifactId>
+                <version>${bdbje.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.lmdbjava</groupId>
+                <artifactId>lmdbjava</artifactId>
+                <version>${lmdb.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.rocksdb</groupId>
                 <artifactId>rocksdbjni</artifactId>
                 <version>${rocksdb.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.esotericsoftware</groupId>
+                <artifactId>kryo</artifactId>
+                <version>${kryo.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>

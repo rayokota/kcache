@@ -14,17 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.rocksdb;
+package io.kcache.bdbje;
 
 import io.kcache.Cache;
 import io.kcache.PersistentCacheTest;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 
-public class RocksDBCacheTest extends PersistentCacheTest {
+public class BdbJECacheTest extends PersistentCacheTest {
 
     @Override
     protected Cache<Bytes, byte[]> getCache() {
-        return new RocksDBCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
+        return new BdbJECache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
     }
 }

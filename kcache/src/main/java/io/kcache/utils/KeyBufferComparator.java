@@ -24,8 +24,12 @@ import org.apache.kafka.common.serialization.Serde;
 
 public class KeyBufferComparator<K> implements Comparator<ByteBuffer> {
 
-    private final Serde<K> keySerde;
-    private final Comparator<? super K> keyComparator;
+    private Serde<K> keySerde;
+    private Comparator<? super K> keyComparator;
+
+    // For serialization
+    public KeyBufferComparator() {
+    }
 
     public KeyBufferComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
         this.keySerde = keySerde;

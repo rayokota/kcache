@@ -17,6 +17,7 @@
 package io.kcache;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.util.HashMap;
@@ -112,6 +113,23 @@ public abstract class PersistentCacheTest {
     }
 
     @Test
+    public void shouldDelete() {
+        cache.init();
+        final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
+        final byte[] valueBytes = stringSerializer.serialize(null, "A");
+
+        cache.put(keyBytes, valueBytes);
+
+        String retrievedValue = stringDeserializer.deserialize(null, cache.get(keyBytes));
+        assertEquals("A", retrievedValue);
+
+        cache.remove(keyBytes);
+
+        retrievedValue = stringDeserializer.deserialize(null, cache.get(keyBytes));
+        assertNull("A", retrievedValue);
+    }
+
+    @Test
     public void shouldReturnSubCaches() {
         final Map<Bytes, byte[]> entries = new HashMap<>();
         entries.put(
@@ -144,21 +162,6 @@ public abstract class PersistentCacheTest {
         kv = iter.next();
         assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("d", stringDeserializer.deserialize(null, kv.value));
-        iter.close();
-
-        iter = cache.descendingCache().all();
-        kv = iter.next();
-        assertEquals("4", stringDeserializer.deserialize(null, kv.key.get()));
-        assertEquals("d", stringDeserializer.deserialize(null, kv.value));
-        kv = iter.next();
-        assertEquals("3", stringDeserializer.deserialize(null, kv.key.get()));
-        assertEquals("c", stringDeserializer.deserialize(null, kv.value));
-        kv = iter.next();
-        assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
-        assertEquals("b", stringDeserializer.deserialize(null, kv.value));
-        kv = iter.next();
-        assertEquals("1", stringDeserializer.deserialize(null, kv.key.get()));
-        assertEquals("a", stringDeserializer.deserialize(null, kv.value));
         iter.close();
 
         Cache<Bytes, byte[]> subCache = cache.subCache(
@@ -218,6 +221,33 @@ public abstract class PersistentCacheTest {
 
         assertEquals(3, subCache.size());
         assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
+
+        subCache = cache.subCache(
+            null,
+            false,
+            new Bytes(stringSerializer.serialize(null, "4")),
+            true);
+
+        assertEquals(4, subCache.size());
+        assertNotNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
+
+        subCache = cache.subCache(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            true,
+            null,
+            false);
+
+        assertEquals(4, subCache.size());
+        assertNotNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
+
+        subCache = cache.subCache(
+            null,
+            false,
+            null,
+            false);
+
+        assertEquals(4, subCache.size());
+        assertNotNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
 
         Cache<Bytes, byte[]> descendingCache = cache.descendingCache();
         iter = descendingCache.all();
@@ -304,6 +334,42 @@ public abstract class PersistentCacheTest {
         kv = iter.next();
         assertEquals("2", stringDeserializer.deserialize(null, kv.key.get()));
         assertEquals("b", stringDeserializer.deserialize(null, kv.value));
+
+        subCache = descendingCache.subCache(
+            null,
+            false,
+            new Bytes(stringSerializer.serialize(null, "1")),
+            false);
+
+        assertEquals(3, subCache.size());
+        assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "4")),
+            false,
+            null,
+            false);
+
+        assertEquals(3, subCache.size());
+        assertNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
+
+        subCache = descendingCache.subCache(
+            null,
+            false,
+            new Bytes(stringSerializer.serialize(null, "1")),
+            true);
+
+        assertEquals(4, subCache.size());
+        assertNotNull(subCache.get(new Bytes(stringSerializer.serialize(null, "1"))));
+
+        subCache = descendingCache.subCache(
+            new Bytes(stringSerializer.serialize(null, "4")),
+            true,
+            null,
+            false);
+
+        assertEquals(4, subCache.size());
+        assertNotNull(subCache.get(new Bytes(stringSerializer.serialize(null, "4"))));
 
         iter.close();
     }

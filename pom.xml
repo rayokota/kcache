@@ -34,6 +34,7 @@
 
     <modules>
         <module>kcache</module>
+        <module>kcache-lmdb</module>
         <module>kcache-rocksdb</module>
     </modules>
 
@@ -47,6 +48,7 @@
         <kafka.version>2.6.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <guava.version>29.0-jre</guava.version>
+        <lmdb.version>0.8.1</lmdb.version>
         <rocksdb.version>6.7.3</rocksdb.version>
         <scala.version>${kafka.scala.version}.3</scala.version>
         <sl4j.version>1.7.30</sl4j.version>
@@ -64,6 +66,11 @@
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
             </dependency>
+	    <dependency>
+	        <groupId>org.lmdbjava</groupId>
+	        <artifactId>lmdbjava</artifactId>
+	        <version>${lmdb.version}</version>
+	    </dependency>
             <dependency>
                 <groupId>org.rocksdb</groupId>
                 <artifactId>rocksdbjni</artifactId>

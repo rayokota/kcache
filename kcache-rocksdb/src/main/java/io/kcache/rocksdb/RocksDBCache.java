@@ -22,6 +22,7 @@ import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.PersistentCache;
+import io.kcache.utils.KeyBytesComparator;
 import io.kcache.utils.Streams;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
@@ -529,12 +530,12 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         @Override
         public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
                                                       byte[] to, boolean toInclusive, boolean isDescending) {
-            Comparator<byte[]> bytesComparator = new RocksDBKeyComparator<K>(keySerde, comparator());
+            Comparator<byte[]> bytesComparator = new KeyBytesComparator<>(keySerde, comparator());
 
             if (from != null && to != null) {
                 int cmp = bytesComparator.compare(from, to);
                 if ((isDescending && cmp < 0) || (!isDescending && cmp > 0)) {
-                    log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                    log.warn("Returning empty iterator for fetch with invalid key range. "
                         + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                         "Note that the built-in numerical serdes do not follow this for negative numbers");
                     return KeyValueIterators.emptyIterator();

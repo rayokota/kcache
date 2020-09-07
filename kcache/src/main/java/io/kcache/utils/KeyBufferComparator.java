@@ -16,31 +16,30 @@
  * limitations under the License.
  */
 
-package io.kcache.rocksdb;
+package io.kcache.utils;
 
-import io.kcache.utils.KeyBytesComparator;
-import org.apache.kafka.common.serialization.Serde;
-import org.rocksdb.ComparatorOptions;
-import org.rocksdb.Slice;
-
+import java.nio.ByteBuffer;
 import java.util.Comparator;
+import org.apache.kafka.common.serialization.Serde;
 
-public class RocksDBKeySliceComparator<K> extends org.rocksdb.Comparator {
+public class KeyBufferComparator<K> implements Comparator<ByteBuffer> {
 
-    private final Comparator<byte[]> comparator;
+    private final Serde<K> keySerde;
+    private final Comparator<? super K> keyComparator;
 
-    public RocksDBKeySliceComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
-        super(new ComparatorOptions());
-        this.comparator = new KeyBytesComparator<>(keySerde, keyComparator);
+    public KeyBufferComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
+        this.keySerde = keySerde;
+        this.keyComparator = keyComparator;
     }
 
     @Override
-    public String name() {
-        return getClass().getName();
-    }
-
-    @Override
-    public int compare(Slice slice1, Slice slice2) {
-        return comparator.compare(slice1.data(), slice2.data());
+    public int compare(ByteBuffer b1, ByteBuffer b2) {
+        byte[] key1Bytes = new byte[b1.remaining()];
+        byte[] key2Bytes = new byte[b2.remaining()];
+        b1.duplicate().get(key1Bytes);
+        b2.duplicate().get(key2Bytes);
+        K key1 = keySerde.deserializer().deserialize(null, key1Bytes);
+        K key2 = keySerde.deserializer().deserialize(null, key2Bytes);
+        return keyComparator.compare(key1, key2);
     }
 }

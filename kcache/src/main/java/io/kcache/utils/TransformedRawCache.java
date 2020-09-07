@@ -17,11 +17,8 @@
 package io.kcache.utils;
 
 import io.kcache.Cache;
-import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
 import org.apache.kafka.common.serialization.Serde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

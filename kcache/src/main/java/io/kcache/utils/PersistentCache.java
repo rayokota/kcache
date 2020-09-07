@@ -17,11 +17,8 @@
 package io.kcache.utils;
 
 import io.kcache.Cache;
-import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheException;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

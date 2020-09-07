@@ -22,7 +22,6 @@ import static org.junit.Assert.assertNull;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;

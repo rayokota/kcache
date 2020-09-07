@@ -19,8 +19,6 @@ package io.kcache.rocksdb;
 import io.kcache.Cache;
 import io.kcache.KafkaPersistentCacheTest;
 import org.apache.kafka.common.serialization.Serdes;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class KafkaRocksDBCacheTest extends KafkaPersistentCacheTest {
 

@@ -21,25 +21,17 @@ import static org.lmdbjava.DbiFlags.MDB_CREATE;
 import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
-import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.KeyBufferComparator;
 import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
-import io.kcache.utils.Streams;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.AbstractMap;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.lmdbjava.Dbi;
@@ -68,8 +60,6 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     private File dbDir;
     private Env<ByteBuffer> env;
     private Dbi<ByteBuffer> db;
-
-    private volatile boolean open = false;
 
     public LmdbCache(final String name,
                      final String rootDir,
@@ -100,7 +90,8 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         this.valueSerde = valueSerde;
     }
 
-    private void openDB() {
+    @Override
+    protected void openDB() {
         dbDir = new File(new File(rootDir, parentDir), name);
 
         try {
@@ -111,7 +102,6 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         }
 
         openLmdb();
-        open = true;
     }
 
     private void openLmdb() {
@@ -128,43 +118,9 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     }
 
     @Override
-    public synchronized void init() {
-        // open the DB dir
-        openDB();
-    }
-
-    @Override
-    public void sync() {
-        // do nothing
-    }
-
-    private void validateStoreOpen() {
-        if (!open) {
-            throw new CacheException("Store " + name + " is currently closed");
-        }
-    }
-
-    @Override
     public int size() {
         validateStoreOpen();
         return (int) env.stat().entries;
-    }
-
-    @Override
-    public boolean isEmpty() {
-        validateStoreOpen();
-        return size() == 0;
-    }
-
-    @Override
-    public boolean containsKey(Object key) {
-        validateStoreOpen();
-        return get(key) != null;
-    }
-
-    @Override
-    public boolean containsValue(Object value) {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -179,17 +135,6 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         keyBuf.put(keyBytes).flip();
         valueBuf.put(valueBytes).flip();
         db.put(keyBuf, valueBuf);
-        return originalValue;
-    }
-
-    @Override
-    public V putIfAbsent(final K key, final V value) {
-        // Threads accessing this method should use external synchronization
-        Objects.requireNonNull(key, "key cannot be null");
-        final V originalValue = get(key);
-        if (originalValue == null) {
-            put(key, value);
-        }
         return originalValue;
     }
 
@@ -238,56 +183,6 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         keyBuf.put(keyBytes).flip();
         db.delete(keyBuf);
         return originalValue;
-    }
-
-    @Override
-    public void clear() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Set<K> keySet() {
-        return Streams.streamOf(all())
-            .map(kv -> kv.key)
-            .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
-    }
-
-    @Override
-    public Collection<V> values() {
-        return Streams.streamOf(all())
-            .map(kv -> kv.value)
-            .collect(Collectors.toList());
-    }
-
-    @Override
-    public Set<Entry<K, V>> entrySet() {
-        return Streams.streamOf(all())
-            .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
-            .collect(Collectors.toCollection(
-                () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
-    }
-
-    @Override
-    public K firstKey() {
-        KeyValueIterator<K, V> iter = all(false);
-        if (!iter.hasNext()) {
-            throw new NoSuchElementException();
-        }
-        return iter.next().key;
-    }
-
-    @Override
-    public K lastKey() {
-        KeyValueIterator<K, V> iter = all(true);
-        if (!iter.hasNext()) {
-            throw new NoSuchElementException();
-        }
-        return iter.next().key;
-    }
-
-    @Override
-    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
-        return range(from, fromInclusive, to, toInclusive, false);
     }
 
     @Override
@@ -382,11 +277,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
-        return all(false);
-    }
-
-    private KeyValueIterator<K, V> all(boolean isDescending) {
+    protected KeyValueIterator<K, V> all(boolean isDescending) {
         validateStoreOpen();
         KeyRange<ByteBuffer> keyRange = isDescending ? KeyRange.allBackward() : KeyRange.all();
         final KeyValueIterator<byte[], byte[]> lmdbIterator = new LmdbIterator(env, db, keyRange);
@@ -402,12 +293,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     }
 
     @Override
-    public synchronized void close() {
-        if (!open) {
-            return;
-        }
-
-        open = false;
+    protected void closeDB() {
         db.close();
         env.close();
 

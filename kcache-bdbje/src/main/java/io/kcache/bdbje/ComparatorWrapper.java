@@ -54,6 +54,7 @@ public class ComparatorWrapper implements Comparator<byte[]>, Serializable {
         stream.write(baos.toByteArray());
     }
 
+    @SuppressWarnings("unchecked")
     private void readObject(java.io.ObjectInputStream stream)
         throws IOException, ClassNotFoundException {
         Input input = new Input(stream);

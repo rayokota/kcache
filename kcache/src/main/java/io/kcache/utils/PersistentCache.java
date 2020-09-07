@@ -18,6 +18,8 @@ package io.kcache.utils;
 
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
+import io.kcache.exceptions.CacheException;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +39,9 @@ import java.util.stream.Collectors;
 public abstract class PersistentCache<K, V> implements Cache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
 
-    private Comparator<K> comparator;
+    private final Comparator<K> comparator;
+
+    private volatile boolean open = false;
 
     public PersistentCache(Comparator<K> comparator) {
         this.comparator = comparator;
@@ -54,6 +58,55 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public synchronized void init() {
+        // open the DB dir
+        openDB();
+        open = true;
+    }
+
+    protected abstract void openDB();
+
+    @Override
+    public void sync() {
+        // do nothing
+    }
+
+    protected void validateStoreOpen() {
+        if (!open) {
+            throw new CacheException("Cache is currently closed");
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        validateStoreOpen();
+        return size() == 0;
+    }
+
+    @Override
+    public boolean containsKey(Object key) {
+        validateStoreOpen();
+        return get(key) != null;
+    }
+
+    @Override
+    public boolean containsValue(Object value) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public V putIfAbsent(final K key, final V value) {
+        // Threads accessing this method should use external synchronization
+        // See https://github.com/facebook/rocksdb/issues/433
+        Objects.requireNonNull(key, "key cannot be null");
+        final V originalValue = get(key);
+        if (originalValue == null) {
+            put(key, value);
+        }
+        return originalValue;
+    }
+
+    @Override
     public Cache<K, V> subCache(K from, boolean fromInclusive, K to, boolean toInclusive) {
         return new SubCache<>(this, from, fromInclusive, to, toInclusive, false);
     }
@@ -63,7 +116,77 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         return new SubCache<>(this, null, false, null, false, true);
     }
 
-    protected abstract KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending);
+    @Override
+    public Set<K> keySet() {
+        return Streams.streamOf(all())
+            .map(kv -> kv.key)
+            .collect(Collectors.toCollection(() -> new TreeSet<>(comparator())));
+    }
+
+    @Override
+    public Collection<V> values() {
+        return Streams.streamOf(all())
+            .map(kv -> kv.value)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+        return Streams.streamOf(all())
+            .map(kv -> new AbstractMap.SimpleEntry<>(kv.key, kv.value))
+            .collect(Collectors.toCollection(
+                () -> new TreeSet<>((e1, e2) -> comparator().compare(e1.getKey(), e2.getKey()))));
+    }
+
+    @Override
+    public K firstKey() {
+        KeyValueIterator<K, V> iter = all(false);
+        if (!iter.hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return iter.next().key;
+    }
+
+    @Override
+    public K lastKey() {
+        KeyValueIterator<K, V> iter = all(true);
+        if (!iter.hasNext()) {
+            throw new NoSuchElementException();
+        }
+        return iter.next().key;
+    }
+
+    @Override
+    public KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive) {
+        return range(from, fromInclusive, to, toInclusive, false);
+    }
+
+    protected abstract KeyValueIterator<K, V> range(
+        K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending);
+
+    @Override
+    public KeyValueIterator<K, V> all() {
+        return all(false);
+    }
+
+    protected abstract KeyValueIterator<K, V> all(boolean isDescending);
+
+    @Override
+    public void clear() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public synchronized void close() {
+        if (!open) {
+            return;
+        }
+
+        open = false;
+        closeDB();
+    }
+
+    protected abstract void closeDB();
 
     /**
      * Compares using comparator or natural ordering if null.

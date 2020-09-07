@@ -63,7 +63,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         return new SubCache<>(this, null, false, null, false, true);
     }
 
-    abstract protected KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending);
+    protected abstract KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending);
 
     /**
      * Compares using comparator or natural ordering if null.

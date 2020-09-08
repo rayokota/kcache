@@ -162,7 +162,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private Cache<K, V> createLocalCache(String backingCacheName, Comparator<K> comparator) {
+    private Cache<K, V> createLocalCache(String backingCacheName, Comparator<K> cmp) {
         try {
             if (backingCacheName == null) {
                 backingCacheName = "default";
@@ -172,7 +172,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             String clsName = null;
             switch (cacheType) {
                 case MEMORY:
-                    return new InMemoryCache<>();
+                    return new InMemoryCache<>(cmp);
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
                     break;
@@ -187,7 +187,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class.forName(clsName);
             Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
                 String.class, String.class, Serde.class, Serde.class, Comparator.class);
-            return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, comparator);
+            return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);
         }

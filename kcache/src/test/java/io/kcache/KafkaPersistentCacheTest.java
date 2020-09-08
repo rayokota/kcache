@@ -44,8 +44,6 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
 
     protected final String topic = KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
 
-    protected abstract Cache<String, String> getCache();
-
     @After
     @Override
     public void teardown() throws IOException {
@@ -57,19 +55,25 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
 
     @Override
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> rocksDBCache = getCache();
-        Properties props = new Properties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG, dir.getRoot().toString());
+        Properties props = getKafkaCacheProperties();
         KafkaCacheConfig config = new KafkaCacheConfig(props);
         Cache<String, String> kafkaCache = Caches.concurrentCache(
             new KafkaCache<>(config,
                 Serdes.String(),
                 Serdes.String(),
                 new StringUpdateHandler(),
-                rocksDBCache));
+                topic,
+                null));
         kafkaCache.init();
         return kafkaCache;
+    }
+
+    protected Properties getKafkaCacheProperties() {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG, dir.getRoot().toString());
+        props.put(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG, dir.getRoot().toString());
+        return props;
     }
 
     @Test

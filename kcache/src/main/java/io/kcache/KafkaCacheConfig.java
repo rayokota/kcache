@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import io.kcache.utils.EnumRecommender;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -79,9 +80,17 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_INIT_TIMEOUT_CONFIG = "kafkacache.init.timeout.ms";
     /**
+     * <code>kafkacache.backing.cache</code>
+     */
+    public static final String KAFKACACHE_BACKING_CACHE_CONFIG = "kafkacache.backing.cache";
+    /**
      * <code>kafkacache.checkpoint.dir</code>
      */
     public static final String KAFKACACHE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
+    /**
+     * <code>kafkacache.data.dir</code>
+     */
+    public static final String KAFKACACHE_DATA_DIR_CONFIG = "kafkacache.data.dir";
 
     public static final String KAFKACACHE_SECURITY_PROTOCOL_CONFIG =
         "kafkacache.security.protocol";
@@ -147,8 +156,12 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "that stores data.";
     protected static final String KAFKACACHE_TIMEOUT_DOC =
         "The timeout for an operation on the Kafka cache.";
+    protected static final String KAFKACACHE_BACKING_CACHE_DOC =
+        "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, and `rocksdb`.";
     protected static final String KAFKACACHE_CHECKPOINT_DIR_DOC =
-        "For persistent caches, the directory in which to store offset checkpoints.";
+        "For persistent backing caches, the directory in which to store offset checkpoints.";
+    protected static final String KAFKACACHE_DATA_DIR_DOC =
+        "For persistent backing caches, the directory in which to store data.";
 
     protected static final String KAFKACACHE_SECURITY_PROTOCOL_DOC =
         "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
@@ -231,8 +244,16 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TIMEOUT_DOC
             )
+            .define(KAFKACACHE_BACKING_CACHE_CONFIG, ConfigDef.Type.STRING,
+                CacheType.MEMORY.name().toLowerCase(Locale.ROOT),
+                new EnumRecommender<>(CacheType.class, e -> e.toLowerCase(Locale.ROOT)),
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_BACKING_CACHE_DOC
+            )
             .define(KAFKACACHE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_DIR_DOC
+            )
+            .define(KAFKACACHE_DATA_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_DATA_DIR_DOC
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
                 ConfigDef.Importance.LOW, KAFKACACHE_GROUP_ID_DOC

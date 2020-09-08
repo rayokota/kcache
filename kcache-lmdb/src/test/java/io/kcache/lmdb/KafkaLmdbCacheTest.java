@@ -16,14 +16,17 @@
 
 package io.kcache.lmdb;
 
-import io.kcache.Cache;
+import io.kcache.CacheType;
+import io.kcache.KafkaCacheConfig;
 import io.kcache.KafkaPersistentCacheTest;
-import org.apache.kafka.common.serialization.Serdes;
+import java.util.Properties;
 
 public class KafkaLmdbCacheTest extends KafkaPersistentCacheTest {
 
     @Override
-    protected Cache<String, String> getCache() {
-        return new LmdbCache<>(topic, dir.getRoot().toString(), Serdes.String(), Serdes.String());
+    protected Properties getKafkaCacheProperties() {
+        Properties props = super.getKafkaCacheProperties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.LMDB.name().toLowerCase());
+        return props;
     }
 }

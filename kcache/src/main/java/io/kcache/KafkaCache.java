@@ -22,6 +22,7 @@ import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
+import java.lang.reflect.Constructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -104,13 +105,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                       Serde<V> valueSerde) {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        setUp(new KafkaCacheConfig(props), keySerde, valueSerde, null, new InMemoryCache<>());
+        setUp(new KafkaCacheConfig(props), keySerde, valueSerde, null, null, null, null);
     }
 
     public KafkaCache(KafkaCacheConfig config,
                       Serde<K> keySerde,
                       Serde<V> valueSerde) {
-        setUp(config, keySerde, valueSerde, null, new InMemoryCache<>());
+        setUp(config, keySerde, valueSerde, null, null, null, null);
     }
 
     public KafkaCache(KafkaCacheConfig config,
@@ -118,14 +119,26 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                       Serde<V> valueSerde,
                       CacheUpdateHandler<K, V> cacheUpdateHandler,
                       Cache<K, V> localCache) {
-        setUp(config, keySerde, valueSerde, cacheUpdateHandler, localCache);
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, null, null, localCache);
+    }
+
+    public KafkaCache(KafkaCacheConfig config,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde,
+                      CacheUpdateHandler<K, V> cacheUpdateHandler,
+                      String backingCacheName,
+                      Comparator<K> comparator) {
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, backingCacheName, comparator, null);
     }
 
     private void setUp(KafkaCacheConfig config,
                        Serde<K> keySerde,
                        Serde<V> valueSerde,
                        CacheUpdateHandler<K, V> cacheUpdateHandler,
+                       String backingCacheName,
+                       Comparator<K> comparator,
                        Cache<K, V> localCache) {
+        this.config = config;
         this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
         this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
         this.desiredNumPartitions = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG);
@@ -142,11 +155,42 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.localCache = localCache;
-        this.config = config;
+        this.localCache = localCache != null ? localCache : createLocalCache(backingCacheName, comparator);
         this.bootstrapBrokers = config.bootstrapBrokers();
 
         log.info("Initializing Kafka cache {} with broker endpoints {} ", clientId, bootstrapBrokers);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Cache<K, V> createLocalCache(String backingCacheName, Comparator<K> comparator) {
+        try {
+            if (backingCacheName == null) {
+                backingCacheName = "default";
+            }
+            CacheType cacheType = CacheType.get(
+                config.getString(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG));
+            String clsName = null;
+            switch (cacheType) {
+                case MEMORY:
+                    return new InMemoryCache<>();
+                case BDBJE:
+                    clsName = "io.kcache.bdbje.BdbJECache";
+                    break;
+                case LMDB:
+                    clsName = "io.kcache.lmdb.LmdbCache";
+                    break;
+                case ROCKSDB:
+                    clsName = "io.kcache.rocksdb.RocksDBCache";
+                    break;
+            }
+            String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
+            Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class.forName(clsName);
+            Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
+                String.class, String.class, Serde.class, Serde.class, Comparator.class);
+            return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, comparator);
+        } catch (Exception e) {
+            throw new CacheInitializationException("Could not create backing cache", e);
+        }
     }
 
     @Override

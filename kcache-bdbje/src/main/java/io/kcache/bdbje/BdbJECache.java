@@ -58,7 +58,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
 
     private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
 
-    private static final String DB_FILE_DIR = "lmdb";
+    private static final String DB_FILE_DIR = "bdbje";
 
     private final String name;
     private final String parentDir;
@@ -76,6 +76,14 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                       Serde<K> keySerde,
                       Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, rootDir, keySerde, valueSerde);
+    }
+
+    public BdbJECache(final String name,
+                      final String rootDir,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde,
+                      Comparator<K> comparator) {
+        this(name, DB_FILE_DIR, rootDir, keySerde, valueSerde, comparator);
     }
 
     public BdbJECache(final String name,

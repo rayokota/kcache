@@ -99,6 +99,14 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
     }
 
     public RocksDBCache(final String name,
+                        final String rootDir,
+                        Serde<K> keySerde,
+                        Serde<V> valueSerde,
+                        Comparator<K> comparator) {
+        this(name, DB_FILE_DIR, rootDir, keySerde, valueSerde, comparator);
+    }
+
+    public RocksDBCache(final String name,
                         final String parentDir,
                         final String rootDir,
                         Serde<K> keySerde,

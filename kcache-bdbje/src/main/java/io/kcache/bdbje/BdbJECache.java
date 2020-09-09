@@ -51,7 +51,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A persistent key-value store based on LMDB.
+ * A persistent key-value store based on BDB JE.
  */
 public class BdbJECache<K, V> extends PersistentCache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(BdbJECache.class);

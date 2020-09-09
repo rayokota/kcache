@@ -34,6 +34,7 @@
         <module>kcache</module>
         <module>kcache-bdbje</module>
         <module>kcache-lmdb</module>
+        <module>kcache-mapdb</module>
         <module>kcache-rocksdb</module>
     </modules>
 
@@ -50,6 +51,7 @@
         <kryo.version>5.0.0-RC9</kryo.version>
         <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.1</lmdb.version>
+        <mapdb.version>3.0.8</mapdb.version>
         <rocksdb.version>6.7.3</rocksdb.version>
         <scala.version>${kafka.scala.version}.3</scala.version>
         <sl4j.version>1.7.30</sl4j.version>
@@ -76,6 +78,11 @@
                 <groupId>org.lmdbjava</groupId>
                 <artifactId>lmdbjava</artifactId>
                 <version>${lmdb.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mapdb</groupId>
+                <artifactId>mapdb</artifactId>
+                <version>${mapdb.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.rocksdb</groupId>

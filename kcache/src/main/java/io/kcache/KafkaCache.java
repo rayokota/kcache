@@ -179,6 +179,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 case LMDB:
                     clsName = "io.kcache.lmdb.LmdbCache";
                     break;
+                case MAPDB:
+                    clsName = "io.kcache.mapdb.MapDBCache";
+                    break;
                 case ROCKSDB:
                     clsName = "io.kcache.rocksdb.RocksDBCache";
                     break;

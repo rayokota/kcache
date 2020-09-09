@@ -14,35 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.kcache.mapdb;
 
-package io.kcache;
+import io.kcache.Cache;
+import io.kcache.PersistentCacheTest;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-
-public enum CacheType {
-    MEMORY,
-    BDBJE,
-    LMDB,
-    MAPDB,
-    ROCKSDB;
-
-    private static final Map<String, CacheType> lookup = new HashMap<>();
-
-    static {
-        for (CacheType v : EnumSet.allOf(CacheType.class)) {
-            lookup.put(v.toString(), v);
-        }
-    }
-
-    public static CacheType get(String name) {
-        return lookup.get(name.toLowerCase(Locale.ROOT));
-    }
+public class MapDBCacheTest extends PersistentCacheTest {
 
     @Override
-    public String toString() {
-        return name().toLowerCase(Locale.ROOT);
+    protected Cache<Bytes, byte[]> getCache() {
+        return new MapDBCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
     }
 }

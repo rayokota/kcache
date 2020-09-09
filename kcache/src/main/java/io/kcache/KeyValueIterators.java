@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import org.apache.kafka.common.serialization.Serde;
@@ -168,6 +169,11 @@ public class KeyValueIterators {
     }
 
     public static <K, V> KeyValueIterator<K, V> transformRawIterator(
+        Serde<K> keySerde, Serde<V> valueSerde, Iterator<Map.Entry<byte[], byte[]>> rawIterator) {
+        return new TransformedRawEntryIterator<>(keySerde, valueSerde, rawIterator);
+    }
+
+    public static <K, V> KeyValueIterator<K, V> transformRawIterator(
         Serde<K> keySerde, Serde<V> valueSerde, KeyValueIterator<byte[], byte[]> rawIterator) {
         return new TransformedRawKeyValueIterator<>(keySerde, valueSerde, rawIterator);
     }
@@ -287,6 +293,42 @@ public class KeyValueIterators {
 
         @Override
         public void close() {
+        }
+    }
+
+    private static class TransformedRawEntryIterator<K, V> implements KeyValueIterator<K, V> {
+        private final Serde<K> keySerde;
+        private final Serde<V> valueSerde;
+        private final Iterator<Map.Entry<byte[], byte[]>> rawIterator;
+
+        TransformedRawEntryIterator(
+            Serde<K> keySerde, Serde<V> valueSerde, Iterator<Map.Entry<byte[], byte[]>> rawIterator) {
+            this.keySerde = keySerde;
+            this.valueSerde = valueSerde;
+            this.rawIterator = rawIterator;
+        }
+
+        @Override
+        public final boolean hasNext() {
+            return this.rawIterator.hasNext();
+        }
+
+        @Override
+        public final KeyValue<K, V> next() {
+            Map.Entry<byte[], byte[]> keyValue = this.rawIterator.next();
+            return new KeyValue<>(
+                keySerde.deserializer().deserialize(null, keyValue.getKey()),
+                valueSerde.deserializer().deserialize(null, keyValue.getValue())
+            );
+        }
+
+        @Override
+        public final void remove() {
+            this.rawIterator.remove();
+        }
+
+        @Override
+        public final void close() {
         }
     }
 

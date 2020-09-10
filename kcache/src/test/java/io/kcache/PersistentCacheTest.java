@@ -115,15 +115,30 @@ public abstract class PersistentCacheTest {
     @Test
     public void shouldDelete() {
         cache.init();
+
+        assertEquals(0, cache.size());
+
         final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
         final byte[] valueBytes = stringSerializer.serialize(null, "A");
-
         cache.put(keyBytes, valueBytes);
 
+        assertEquals(1, cache.size());
         String retrievedValue = stringDeserializer.deserialize(null, cache.get(keyBytes));
         assertEquals("A", retrievedValue);
 
+        Bytes keyBytes2 = new Bytes(stringSerializer.serialize(null, "two"));
+        final byte[] valueBytes2 = stringSerializer.serialize(null, "B");
+        cache.put(keyBytes2, valueBytes2);
+
+        assertEquals(2, cache.size());
+        retrievedValue = stringDeserializer.deserialize(null, cache.get(keyBytes2));
+        assertEquals("B", retrievedValue);
+
+        cache.remove(keyBytes2);
+        assertEquals(1, cache.size());
+
         cache.remove(keyBytes);
+        assertEquals(0, cache.size());
 
         retrievedValue = stringDeserializer.deserialize(null, cache.get(keyBytes));
         assertNull("A", retrievedValue);

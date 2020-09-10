@@ -337,7 +337,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
         if (db == null) {
             return;
         }
-        env.sync();
+        env.flushLog(true);
     }
 
     @Override

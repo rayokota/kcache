@@ -95,7 +95,9 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     @Override
     public int size() {
         validateStoreOpen();
-        return (int) env.stat().entries;
+        try (Txn<ByteBuffer> txn = env.txnRead()) {
+            return (int) db.stat(txn).entries;
+        }
     }
 
     @Override

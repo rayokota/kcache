@@ -149,6 +149,11 @@ public abstract class PersistentCacheTest {
         cache.putAll(entries);
         cache.flush();
 
+        assertEquals(4, cache.size());
+
+        assertEquals("1", stringDeserializer.deserialize(null, cache.firstKey().get()));
+        assertEquals("4", stringDeserializer.deserialize(null, cache.lastKey().get()));
+
         KeyValueIterator<Bytes, byte[]> iter = cache.all();
         KeyValue<Bytes, byte[]> kv = iter.next();
         assertEquals("1", stringDeserializer.deserialize(null, kv.key.get()));

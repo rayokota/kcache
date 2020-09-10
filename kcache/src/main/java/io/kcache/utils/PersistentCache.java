@@ -16,10 +16,17 @@
  */
 package io.kcache.utils;
 
+import com.google.common.primitives.SignedBytes;
 import io.kcache.Cache;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheException;
+import io.kcache.exceptions.CacheInitializationException;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Objects;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,17 +46,50 @@ import java.util.stream.Collectors;
 public abstract class PersistentCache<K, V> implements Cache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
 
+    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
+
+    private final String name;
+    private final File dbDir;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
     private final Comparator<K> comparator;
 
     private volatile boolean open = false;
 
-    public PersistentCache(Comparator<K> comparator) {
-        this.comparator = comparator;
+    public PersistentCache(final String name,
+                           final String parentDir,
+                           final String rootDir,
+                           Serde<K> keySerde,
+                           Serde<V> valueSerde,
+                           Comparator<K> comparator) {
+        this.name = name;
+        this.dbDir = new File(new File(rootDir, parentDir), name);
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.comparator = comparator != null
+            ? comparator
+            : new KeyComparator<>(keySerde, BYTES_COMPARATOR);
     }
 
     @Override
     public boolean isPersistent() {
         return true;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public File dbDir() {
+        return dbDir;
+    }
+
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valueSerde;
     }
 
     @Override
@@ -59,6 +99,13 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
 
     @Override
     public synchronized void init() {
+        try {
+            Files.createDirectories(dbDir.getParentFile().toPath());
+            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+        } catch (final IOException fatal) {
+            throw new CacheInitializationException("Could not create directories", fatal);
+        }
+
         // open the DB dir
         openDB();
         open = true;
@@ -196,6 +243,11 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
     }
 
     protected abstract void closeDB();
+
+    @Override
+    public synchronized void destroy() throws IOException {
+        Utils.delete(dbDir());
+    }
 
     /**
      * Compares using comparator or natural ordering if null.

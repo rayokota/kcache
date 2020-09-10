@@ -18,22 +18,16 @@ package io.kcache.lmdb;
 
 import static org.lmdbjava.DbiFlags.MDB_CREATE;
 
-import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.KeyBufferComparator;
-import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
-import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Utils;
 import org.lmdbjava.Dbi;
 import org.lmdbjava.Env;
 import org.lmdbjava.KeyRange;
@@ -47,17 +41,8 @@ import org.slf4j.LoggerFactory;
 public class LmdbCache<K, V> extends PersistentCache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(LmdbCache.class);
 
-    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
-
     private static final String DB_FILE_DIR = "lmdb";
 
-    private final String name;
-    private final String parentDir;
-    private final String rootDir;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-
-    private File dbDir;
     private Env<ByteBuffer> env;
     private Dbi<ByteBuffer> db;
 
@@ -90,38 +75,20 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
                      Serde<K> keySerde,
                      Serde<V> valueSerde,
                      Comparator<K> comparator) {
-        super(comparator != null ? comparator : new KeyComparator<>(keySerde, BYTES_COMPARATOR));
-        this.name = name;
-        this.parentDir = parentDir;
-        this.rootDir = rootDir;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        super(name, parentDir, rootDir, keySerde, valueSerde, comparator);
     }
 
     @Override
     protected void openDB() {
-        dbDir = new File(new File(rootDir, parentDir), name);
-
-        try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new CacheInitializationException("Could not create directories", fatal);
-        }
-
-        openLmdb();
-    }
-
-    private void openLmdb() {
         try {
             env = Env.create()
                 .setMapSize(Integer.MAX_VALUE)
                 .setMaxDbs(1)
                 .setMaxReaders(8)
-                .open(dbDir);
-            db = env.openDbi(name, new KeyBufferComparator<>(keySerde, comparator()), MDB_CREATE);
+                .open(dbDir());
+            db = env.openDbi(name(), new KeyBufferComparator<>(keySerde(), comparator()), MDB_CREATE);
         } catch (final Exception e) {
-            throw new CacheInitializationException("Error opening store " + name + " at location " + dbDir.toString(), e);
+            throw new CacheInitializationException("Error opening store " + name() + " at location " + dbDir(), e);
         }
     }
 
@@ -136,8 +103,8 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final V originalValue = get(key);
-        byte[] keyBytes = keySerde.serializer().serialize(null, key);
-        byte[] valueBytes = valueSerde.serializer().serialize(null, value);
+        byte[] keyBytes = keySerde().serializer().serialize(null, key);
+        byte[] valueBytes = valueSerde().serializer().serialize(null, value);
         ByteBuffer keyBuf = ByteBuffer.allocateDirect(keyBytes.length);
         ByteBuffer valueBuf = ByteBuffer.allocateDirect(valueBytes.length);
         keyBuf.put(keyBytes).flip();
@@ -151,8 +118,8 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         validateStoreOpen();
         try (Txn<ByteBuffer> txn = env.txnWrite()) {
             for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
-                byte[] keyBytes = keySerde.serializer().serialize(null, entry.getKey());
-                byte[] valueBytes = valueSerde.serializer().serialize(null, entry.getValue());
+                byte[] keyBytes = keySerde().serializer().serialize(null, entry.getKey());
+                byte[] valueBytes = valueSerde().serializer().serialize(null, entry.getValue());
                 ByteBuffer keyBuf = ByteBuffer.allocateDirect(keyBytes.length);
                 ByteBuffer valueBuf = ByteBuffer.allocateDirect(valueBytes.length);
                 keyBuf.put(keyBytes).flip();
@@ -168,7 +135,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     public V get(final Object key) {
         validateStoreOpen();
         try (Txn<ByteBuffer> txn = env.txnRead()) {
-            byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+            byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
             ByteBuffer keyBuf = ByteBuffer.allocateDirect(keyBytes.length);
             keyBuf.put(keyBytes).flip();
             ByteBuffer valueBuf = db.get(txn, keyBuf);
@@ -177,7 +144,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
             }
             byte[] valueBytes = new byte[valueBuf.remaining()];
             valueBuf.get(valueBytes);
-            return valueSerde.deserializer().deserialize(null, valueBytes);
+            return valueSerde().deserializer().deserialize(null, valueBytes);
         }
     }
 
@@ -186,7 +153,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
     public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
         final V originalValue = get(key);
-        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
         ByteBuffer keyBuf = ByteBuffer.allocateDirect(keyBytes.length);
         keyBuf.put(keyBytes).flip();
         db.delete(keyBuf);
@@ -195,8 +162,8 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
 
     @Override
     protected KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending) {
-        byte[] fromBytes = keySerde.serializer().serialize(null, from);
-        byte[] toBytes = keySerde.serializer().serialize(null, to);
+        byte[] fromBytes = keySerde().serializer().serialize(null, from);
+        byte[] toBytes = keySerde().serializer().serialize(null, to);
         ByteBuffer fromBuf = null;
         ByteBuffer toBuf = null;
         if (fromBytes != null) {
@@ -281,7 +248,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
             }
         }
         final KeyValueIterator<byte[], byte[]> lmdbIterator = new LmdbIterator(env, db, keyRange);
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, lmdbIterator);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), lmdbIterator);
     }
 
     @Override
@@ -289,7 +256,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
         validateStoreOpen();
         KeyRange<ByteBuffer> keyRange = isDescending ? KeyRange.allBackward() : KeyRange.all();
         final KeyValueIterator<byte[], byte[]> lmdbIterator = new LmdbIterator(env, db, keyRange);
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, lmdbIterator);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), lmdbIterator);
     }
 
     @Override
@@ -307,10 +274,5 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
 
         db = null;
         env = null;
-    }
-
-    @Override
-    public synchronized void destroy() throws IOException {
-        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
     }
 }

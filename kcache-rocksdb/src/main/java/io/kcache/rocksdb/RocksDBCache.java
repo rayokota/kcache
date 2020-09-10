@@ -16,16 +16,14 @@
  */
 package io.kcache.rocksdb;
 
-import com.google.common.primitives.SignedBytes;
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
-import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
 import io.kcache.utils.KeyBytesComparator;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Utils;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -44,13 +42,9 @@ import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,8 +57,6 @@ import java.util.stream.Collectors;
 public class RocksDBCache<K, V> extends PersistentCache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(RocksDBCache.class);
 
-    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
-
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
@@ -73,16 +65,9 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
     private static final int MAX_WRITE_BUFFERS = 3;
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private final String name;
-    private final String parentDir;
-    private final String rootDir;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Set<KeyValueIterator<byte[], byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
-
-    private File dbDir;
     private RocksDB db;
     private RocksDBAccessor dbAccessor;
+    private final Set<KeyValueIterator<byte[], byte[]>> openIterators = ConcurrentHashMap.newKeySet();
 
     // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -120,12 +105,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
                         Serde<K> keySerde,
                         Serde<V> valueSerde,
                         Comparator<K> comparator) {
-        super(comparator != null ? comparator : new KeyComparator<>(keySerde, BYTES_COMPARATOR));
-        this.name = name;
-        this.parentDir = parentDir;
-        this.rootDir = rootDir;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        super(name, parentDir, rootDir, keySerde, valueSerde, comparator);
     }
 
     @Override
@@ -135,7 +115,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         final DBOptions dbOptions = new DBOptions();
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
-        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<K>(keySerde, comparator()));
+        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<K>(keySerde(), comparator()));
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         cache = new LRUCache(BLOCK_CACHE_SIZE);
@@ -169,29 +149,15 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
 
-        dbDir = new File(new File(rootDir, parentDir), name);
-
-        try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new CacheInitializationException("Could not create directories", fatal);
-        }
-
-        openRocksDB(dbOptions, columnFamilyOptions);
-    }
-
-    private void openRocksDB(final DBOptions dbOptions,
-                             final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors
             = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         try {
-            db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
+            db = RocksDB.open(dbOptions, dbDir().getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
             dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
         } catch (final RocksDBException e) {
-            throw new CacheInitializationException("Error opening store " + name + " at location " + dbDir.toString(), e);
+            throw new CacheInitializationException("Error opening store " + name() + " at location " + dbDir(), e);
         }
     }
 
@@ -206,8 +172,8 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final V originalValue = get(key);
-        byte[] keyBytes = keySerde.serializer().serialize(null, key);
-        byte[] valueBytes = valueSerde.serializer().serialize(null, value);
+        byte[] keyBytes = keySerde().serializer().serialize(null, key);
+        byte[] valueBytes = valueSerde().serializer().serialize(null, value);
         dbAccessor.put(keyBytes, valueBytes);
         return originalValue;
     }
@@ -218,12 +184,12 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         try (final WriteBatch batch = new WriteBatch()) {
             Map<byte[], byte[]> rawEntries = entries.entrySet().stream()
                 .collect(Collectors.toMap(
-                    e -> keySerde.serializer().serialize(null, e.getKey()),
-                    e -> valueSerde.serializer().serialize(null, e.getValue())));
+                    e -> keySerde().serializer().serialize(null, e.getKey()),
+                    e -> valueSerde().serializer().serialize(null, e.getValue())));
             dbAccessor.prepareBatch(rawEntries, batch);
             write(batch);
         } catch (final RocksDBException e) {
-            throw new CacheException("Error while batch writing to store " + name, e);
+            throw new CacheException("Error while batch writing to store " + name(), e);
         }
     }
 
@@ -232,12 +198,12 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
     public V get(final Object key) {
         validateStoreOpen();
         try {
-            byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+            byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
             byte[] valueBytes = dbAccessor.get(keyBytes);
-            return valueSerde.deserializer().deserialize(null, valueBytes);
+            return valueSerde().deserializer().deserialize(null, valueBytes);
         } catch (final RocksDBException e) {
             // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-            throw new CacheException("Error while getting value for key from store " + name, e);
+            throw new CacheException("Error while getting value for key from store " + name(), e);
         }
     }
 
@@ -250,8 +216,8 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
 
     @Override
     protected KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending) {
-        byte[] fromBytes = keySerde.serializer().serialize(null, from);
-        byte[] toBytes = keySerde.serializer().serialize(null, to);
+        byte[] fromBytes = keySerde().serializer().serialize(null, from);
+        byte[] toBytes = keySerde().serializer().serialize(null, to);
 
         validateStoreOpen();
 
@@ -259,7 +225,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
             dbAccessor.range(fromBytes, fromInclusive, toBytes, toInclusive, isDescending);
         openIterators.add(rocksDBIterator);
 
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), rocksDBIterator);
     }
 
     @Override
@@ -267,7 +233,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         validateStoreOpen();
         final KeyValueIterator<byte[], byte[]> rocksDBIterator = dbAccessor.all(isDescending);
         openIterators.add(rocksDBIterator);
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, rocksDBIterator);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), rocksDBIterator);
     }
 
     /**
@@ -287,7 +253,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         try {
             numEntries = dbAccessor.approximateNumEntries();
         } catch (final RocksDBException e) {
-            throw new CacheException("Error fetching property from store " + name, e);
+            throw new CacheException("Error fetching property from store " + name(), e);
         }
         if (isOverflowing(numEntries)) {
             return Long.MAX_VALUE;
@@ -309,7 +275,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         try {
             dbAccessor.flush();
         } catch (final RocksDBException e) {
-            throw new CacheException("Error while executing flush from store " + name, e);
+            throw new CacheException("Error while executing flush from store " + name(), e);
         }
     }
 
@@ -339,18 +305,12 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
     }
 
     private void closeOpenIterators() {
-        final HashSet<KeyValueIterator<byte[], byte[]>> iterators = new HashSet<>(openIterators);
-        if (iterators.size() != 0) {
-            log.warn("Closing {} open iterators for store {}", iterators.size(), name);
-            for (final KeyValueIterator<byte[], byte[]> iterator : iterators) {
+        if (openIterators.size() != 0) {
+            log.warn("Closing {} open iterators for store {}", openIterators.size(), name());
+            for (final KeyValueIterator<byte[], byte[]> iterator : openIterators) {
                 iterator.close();
             }
         }
-    }
-
-    @Override
-    public synchronized void destroy() throws IOException {
-        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
     }
 
     interface RocksDBAccessor {
@@ -394,14 +354,14 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
                     db.delete(columnFamily, wOptions, key);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new CacheException("Error while removing key from store " + name, e);
+                    throw new CacheException("Error while removing key from store " + name(), e);
                 }
             } else {
                 try {
                     db.put(columnFamily, wOptions, key, value);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new CacheException("Error while putting key/value into store " + name, e);
+                    throw new CacheException("Error while putting key/value into store " + name(), e);
                 }
             }
         }
@@ -423,7 +383,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         @Override
         public KeyValueIterator<byte[], byte[]> range(byte[] from, boolean fromInclusive,
                                                       byte[] to, boolean toInclusive, boolean isDescending) {
-            Comparator<byte[]> bytesComparator = new KeyBytesComparator<>(keySerde, comparator());
+            Comparator<byte[]> bytesComparator = new KeyBytesComparator<>(keySerde(), comparator());
 
             if (from != null && to != null) {
                 int cmp = bytesComparator.compare(from, to);
@@ -436,7 +396,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
             }
 
             return new RocksDBRangeIterator(
-                name,
+                name(),
                 db.newIterator(columnFamily),
                 openIterators,
                 from,
@@ -449,7 +409,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
 
         @Override
         public KeyValueIterator<byte[], byte[]> all(boolean isDescending) {
-            return new RocksDBIterator(name, db.newIterator(columnFamily), openIterators, isDescending);
+            return new RocksDBIterator(name(), db.newIterator(columnFamily), openIterators, isDescending);
         }
 
         @Override

@@ -16,7 +16,6 @@
  */
 package io.kcache.bdbje;
 
-import com.google.common.primitives.SignedBytes;
 import com.sleepycat.je.Cursor;
 import com.sleepycat.je.CursorConfig;
 import com.sleepycat.je.Database;
@@ -30,23 +29,18 @@ import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.KeyBytesComparator;
-import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,20 +50,11 @@ import org.slf4j.LoggerFactory;
 public class BdbJECache<K, V> extends PersistentCache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(BdbJECache.class);
 
-    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
-
     private static final String DB_FILE_DIR = "bdbje";
 
-    private final String name;
-    private final String parentDir;
-    private final String rootDir;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Set<KeyValueIterator<K, V>> openIterators = Collections.synchronizedSet(new HashSet<>());
-
-    private File dbDir;
     private Environment env;
     private Database db;
+    private final Set<KeyValueIterator<K, V>> openIterators = ConcurrentHashMap.newKeySet();
 
     public BdbJECache(final String name,
                       final String rootDir,
@@ -100,44 +85,24 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                       Serde<K> keySerde,
                       Serde<V> valueSerde,
                       Comparator<K> comparator) {
-        super(comparator != null
-            ? comparator
-            : new KeyComparator<>(new SerdeWrapper<>(keySerde), BYTES_COMPARATOR));
-        this.name = name;
-        this.parentDir = parentDir;
-        this.rootDir = rootDir;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        super(name, parentDir, rootDir, new SerdeWrapper<K>(keySerde), valueSerde, comparator);
     }
 
     @Override
     protected void openDB() {
-        dbDir = new File(new File(rootDir, parentDir), name);
-
-        try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new CacheInitializationException("Could not create directories", fatal);
-        }
-
-        openBdbJE();
-    }
-
-    private void openBdbJE() {
         try {
             // Environment and database opens
             EnvironmentConfig envConfig = new EnvironmentConfig();
             envConfig.setAllowCreate(true);
-            env = new Environment(dbDir, envConfig);
+            env = new Environment(dbDir(), envConfig);
 
             DatabaseConfig dbConfig = new DatabaseConfig();
             dbConfig.setAllowCreate(true);
-            dbConfig.setBtreeComparator(new KeyBytesComparator<>(new SerdeWrapper<K>(keySerde), comparator()));
+            dbConfig.setBtreeComparator(new KeyBytesComparator<>(keySerde(), comparator()));
             dbConfig.setKeyPrefixing(true);
-            db = env.openDatabase(null, name, dbConfig);
+            db = env.openDatabase(null, name(), dbConfig);
         } catch (final Exception e) {
-            throw new CacheInitializationException("Error opening store " + name + " at location " + dbDir.toString(), e);
+            throw new CacheInitializationException("Error opening store " + name() + " at location " + dbDir(), e);
         }
     }
 
@@ -152,9 +117,9 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final V originalValue = get(key);
-        byte[] keyBytes = keySerde.serializer().serialize(null, key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, key);
         DatabaseEntry dbKey = new DatabaseEntry(keyBytes);
-        byte[] valueBytes = valueSerde.serializer().serialize(null, value);
+        byte[] valueBytes = valueSerde().serializer().serialize(null, value);
         DatabaseEntry dbValue = new DatabaseEntry(valueBytes);
         db.put(null, dbKey, dbValue);
         return originalValue;
@@ -164,9 +129,9 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     public void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
         for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
-            byte[] keyBytes = keySerde.serializer().serialize(null, entry.getKey());
+            byte[] keyBytes = keySerde().serializer().serialize(null, entry.getKey());
             DatabaseEntry dbKey = new DatabaseEntry(keyBytes);
-            byte[] valueBytes = valueSerde.serializer().serialize(null, entry.getValue());
+            byte[] valueBytes = valueSerde().serializer().serialize(null, entry.getValue());
             DatabaseEntry dbValue = new DatabaseEntry(valueBytes);
             db.put(null, dbKey, dbValue);
         }
@@ -176,12 +141,12 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     @SuppressWarnings("unchecked")
     public V get(final Object key) {
         validateStoreOpen();
-        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
         DatabaseEntry dbKey = new DatabaseEntry(keyBytes);
         DatabaseEntry dbValue = new DatabaseEntry();
         if (db.get(null, dbKey, dbValue, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
             byte[] valueBytes = dbValue.getData();
-            return valueSerde.deserializer().deserialize(null, valueBytes);
+            return valueSerde().deserializer().deserialize(null, valueBytes);
         } else {
             return null;
         }
@@ -192,7 +157,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
         final V originalValue = get(key);
-        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
         DatabaseEntry dbKey = new DatabaseEntry(keyBytes);
         db.delete(null, dbKey);
         return originalValue;
@@ -201,7 +166,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     @Override
     protected KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending) {
         validateStoreOpen();
-        byte[] fromBytes = keySerde.serializer().serialize(null, from);
+        byte[] fromBytes = keySerde().serializer().serialize(null, from);
         DatabaseEntry dbKey = new DatabaseEntry(fromBytes);
         DatabaseEntry dbValue = new DatabaseEntry();
         Cursor cursor = db.openCursor(null, CursorConfig.READ_UNCOMMITTED); // avoid read locks
@@ -261,7 +226,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                         if (status != OperationStatus.SUCCESS) {
                             break;
                         }
-                        K key = keySerde.deserializer().deserialize(null, Arrays.copyOfRange(
+                        K key = keySerde().deserializer().deserialize(null, Arrays.copyOfRange(
                             dbKey.getData(), dbKey.getOffset(), dbKey.getOffset() + dbKey.getSize()));
 
                         if (!toTest.test(key)) {
@@ -269,7 +234,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                             break;
                         }
 
-                        V value = valueSerde.deserializer().deserialize(null, Arrays.copyOfRange(
+                        V value = valueSerde().deserializer().deserialize(null, Arrays.copyOfRange(
                             dbValue.getData(), dbValue.getOffset(), dbValue.getOffset() + dbValue.getSize()));
 
                         return new KeyValue<>(key, value);
@@ -337,10 +302,10 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                         if (status != OperationStatus.SUCCESS) {
                             break;
                         }
-                        K key = keySerde.deserializer().deserialize(null, Arrays.copyOfRange(
+                        K key = keySerde().deserializer().deserialize(null, Arrays.copyOfRange(
                             dbKey.getData(), dbKey.getOffset(), dbKey.getOffset() + dbKey.getSize()));
 
-                        V value = valueSerde.deserializer().deserialize(null, Arrays.copyOfRange(
+                        V value = valueSerde().deserializer().deserialize(null, Arrays.copyOfRange(
                             dbValue.getData(), dbValue.getOffset(), dbValue.getOffset() + dbValue.getSize()));
 
                         return new KeyValue<>(key, value);
@@ -393,17 +358,11 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     }
 
     private void closeOpenIterators() {
-        final HashSet<KeyValueIterator<K, V>> iterators = new HashSet<>(openIterators);
-        if (iterators.size() != 0) {
-            log.warn("Closing {} open iterators for store {}", iterators.size(), name);
-            for (final KeyValueIterator<K, V> iterator : iterators) {
+        if (openIterators.size() != 0) {
+            log.warn("Closing {} open iterators for store {}", openIterators.size(), name());
+            for (final KeyValueIterator<K, V> iterator : openIterators) {
                 iterator.close();
             }
         }
-    }
-
-    @Override
-    public synchronized void destroy() throws IOException {
-        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
     }
 }

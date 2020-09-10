@@ -16,22 +16,16 @@
  */
 package io.kcache.mapdb;
 
-import com.google.common.primitives.SignedBytes;
-
 import io.kcache.KeyValueIterator;
 import io.kcache.KeyValueIterators;
 import io.kcache.exceptions.CacheInitializationException;
-import io.kcache.utils.KeyComparator;
 import io.kcache.utils.PersistentCache;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Utils;
 import org.mapdb.BTreeMap;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -45,17 +39,8 @@ import org.slf4j.LoggerFactory;
 public class MapDBCache<K, V> extends PersistentCache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(MapDBCache.class);
 
-    private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
-
     private static final String DB_FILE_DIR = "mapdb";
 
-    private final String name;
-    private final String parentDir;
-    private final String rootDir;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-
-    private File dbDir;
     private DB db;
     private BTreeMap<byte[], byte[]> map;
 
@@ -88,42 +73,22 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
                       Serde<K> keySerde,
                       Serde<V> valueSerde,
                       Comparator<K> comparator) {
-        super(comparator != null
-            ? comparator
-            : new KeyComparator<>(keySerde, BYTES_COMPARATOR));
-        this.name = name;
-        this.parentDir = parentDir;
-        this.rootDir = rootDir;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        super(name, parentDir, rootDir, keySerde, valueSerde, comparator);
     }
 
     @Override
     protected void openDB() {
-        dbDir = new File(new File(rootDir, parentDir), name);
-
         try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new CacheInitializationException("Could not create directories", fatal);
-        }
-
-        openMapDB();
-    }
-
-    private void openMapDB() {
-        try {
-            db = DBMaker.fileDB(new File(dbDir, "map.db"))
+            db = DBMaker.fileDB(new File(dbDir(), "map.db"))
                 .fileMmapEnable()
                 .make();
-            map = db.treeMap(name)
-                .keySerializer(new CustomSerializerByteArray<>(keySerde, comparator()))
+            map = db.treeMap(name())
+                .keySerializer(new CustomSerializerByteArray<>(keySerde(), comparator()))
                 .valueSerializer(Serializer.BYTE_ARRAY)
                 .counterEnable()
                 .createOrOpen();
         } catch (final Exception e) {
-            throw new CacheInitializationException("Error opening store " + name + " at location " + dbDir.toString(), e);
+            throw new CacheInitializationException("Error opening store " + name() + " at location " + dbDir(), e);
         }
     }
 
@@ -137,19 +102,19 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
     public V put(final K key, final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        byte[] keyBytes = keySerde.serializer().serialize(null, key);
-        byte[] valueBytes = valueSerde.serializer().serialize(null, value);
+        byte[] keyBytes = keySerde().serializer().serialize(null, key);
+        byte[] valueBytes = valueSerde().serializer().serialize(null, value);
         byte[] oldValueBytes = map.put(keyBytes, valueBytes);
         db.commit();
-        return valueSerde.deserializer().deserialize(null, oldValueBytes);
+        return valueSerde().deserializer().deserialize(null, oldValueBytes);
     }
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
         for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
-            byte[] keyBytes = keySerde.serializer().serialize(null, entry.getKey());
-            byte[] valueBytes = valueSerde.serializer().serialize(null, entry.getValue());
+            byte[] keyBytes = keySerde().serializer().serialize(null, entry.getKey());
+            byte[] valueBytes = valueSerde().serializer().serialize(null, entry.getValue());
             map.put(keyBytes, valueBytes);
         }
         db.commit();
@@ -159,30 +124,30 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
     @SuppressWarnings("unchecked")
     public V get(final Object key) {
         validateStoreOpen();
-        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
         byte[] valueBytes = map.get(keyBytes);
-        return valueSerde.deserializer().deserialize(null, valueBytes);
+        return valueSerde().deserializer().deserialize(null, valueBytes);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public V remove(final Object key) {
         Objects.requireNonNull(key, "key cannot be null");
-        byte[] keyBytes = keySerde.serializer().serialize(null, (K) key);
+        byte[] keyBytes = keySerde().serializer().serialize(null, (K) key);
         byte[] oldValueBytes = map.remove(keyBytes);
         db.commit();
-        return valueSerde.deserializer().deserialize(null, oldValueBytes);
+        return valueSerde().deserializer().deserialize(null, oldValueBytes);
     }
 
     @Override
     protected KeyValueIterator<K, V> range(K from, boolean fromInclusive, K to, boolean toInclusive, boolean isDescending) {
         validateStoreOpen();
-        byte[] fromBytes = keySerde.serializer().serialize(null, from);
-        byte[] toBytes = keySerde.serializer().serialize(null, to);
+        byte[] fromBytes = keySerde().serializer().serialize(null, from);
+        byte[] toBytes = keySerde().serializer().serialize(null, to);
         Iterator<Entry<byte[], byte[]>> iter = isDescending
             ? map.descendingEntryIterator(toBytes, toInclusive, fromBytes, fromInclusive)
             : map.entryIterator(fromBytes, fromInclusive, toBytes, toInclusive);
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, iter);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), iter);
     }
 
     @Override
@@ -191,7 +156,7 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
         Iterator<Entry<byte[], byte[]>> iter = isDescending
             ? map.descendingEntryIterator()
             : map.entryIterator();
-        return KeyValueIterators.transformRawIterator(keySerde, valueSerde, iter);
+        return KeyValueIterators.transformRawIterator(keySerde(), valueSerde(), iter);
     }
 
     @Override
@@ -208,10 +173,5 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
         } catch (Exception e) {
             log.warn("Error during close", e);
         }
-    }
-
-    @Override
-    public synchronized void destroy() throws IOException {
-        Utils.delete(new File(rootDir + File.separator + parentDir + File.separator + name));
     }
 }

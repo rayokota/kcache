@@ -30,7 +30,7 @@ import static org.junit.Assert.*;
 public class EnumRecommenderTest {
 
     enum TestEnum {
-        ONE, TWO, THREE;
+        ONE, TWO, THREE
     }
 
     @Test

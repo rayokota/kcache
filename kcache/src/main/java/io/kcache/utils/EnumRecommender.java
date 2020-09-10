@@ -28,7 +28,7 @@ import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 
-public class EnumRecommender<T extends Enum> implements ConfigDef.Validator, ConfigDef.Recommender {
+public class EnumRecommender<T extends Enum<T>> implements ConfigDef.Validator, ConfigDef.Recommender {
 
     private final Set<String> validValues;
     private final Class<T> enumClass;

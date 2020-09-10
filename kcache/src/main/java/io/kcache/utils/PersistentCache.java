@@ -127,7 +127,9 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
     @Override
     public boolean isEmpty() {
         validateStoreOpen();
-        return size() == 0;
+        try (KeyValueIterator<K, V> iter = all()) {
+            return iter.hasNext();
+        }
     }
 
     @Override
@@ -372,11 +374,15 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         }
 
         public int size() {
-            return entrySet().size();
+            try (KeyValueIterator<K, V> iter = all()) {
+                return (int) Streams.streamOf(iter).count();
+            }
         }
 
         public boolean isEmpty() {
-            return entrySet().isEmpty();
+            try (KeyValueIterator<K, V> iter = all()) {
+                return iter.hasNext();
+            }
         }
 
         public boolean containsValue(Object value) {
@@ -470,29 +476,21 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         /* ----------------  Relational methods -------------- */
 
         public K firstKey() {
-            KeyValueIterator<K, V> iter;
-            if (isDescending) {
-                iter = m.range(hi, hiInclusive, lo, loInclusive, true);
-            } else {
-                iter = m.range(lo, loInclusive, hi, hiInclusive, false);
+            try (KeyValueIterator<K, V> iter = all(false)) {
+                if (!iter.hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                return iter.next().key;
             }
-            if (!iter.hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return iter.next().key;
         }
 
         public K lastKey() {
-            KeyValueIterator<K, V> iter;
-            if (isDescending) {
-                iter = m.range(lo, loInclusive, hi, hiInclusive, false);
-            } else {
-                iter = m.range(hi, hiInclusive, lo, loInclusive, true);
+            try (KeyValueIterator<K, V> iter = all(true)) {
+                if (!iter.hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                return iter.next().key;
             }
-            if (!iter.hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return iter.next().key;
         }
 
         /* ---------------- Submap Views -------------- */
@@ -524,10 +522,14 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         }
 
         public KeyValueIterator<K, V> all() {
-            if (isDescending) {
-                return m.range(hi, hiInclusive, lo, loInclusive, true);
-            } else {
+            return all(false);
+        }
+
+        private KeyValueIterator<K, V> all(boolean isDescending) {
+            if (isDescending == this.isDescending) {
                 return m.range(lo, loInclusive, hi, hiInclusive, false);
+            } else {
+                return m.range(hi, hiInclusive, lo, loInclusive, true);
             }
         }
 

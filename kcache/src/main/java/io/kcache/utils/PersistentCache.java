@@ -525,7 +525,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
             return all(false);
         }
 
-        private KeyValueIterator<K, V> all(boolean isDescending) {
+        KeyValueIterator<K, V> all(boolean isDescending) {
             if (isDescending == this.isDescending) {
                 return m.range(lo, loInclusive, hi, hiInclusive, false);
             } else {

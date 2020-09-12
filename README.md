@@ -48,16 +48,15 @@ cache.close();  // shuts down the cache, consumer, and producer
 One can also use RocksDB to back the `KafkaCache`:
 
 ```java
-Cache<String, String> rocksDBCache =
-    new RocksDBCache<>("rocksdb", "/tmp", Serdes.String(), Serdes.String());
 Properties props = new Properties();
 props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, "rocksdb");
+props.put(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG, "/tmp");
 Cache<String, String> cache = new KafkaCache<>(
     new KafkaCacheConfig(props),
     Serdes.String(),  // for serializing/deserializing keys
     Serdes.String()   // for serializing/deserializing values
-    null,
-    rocksDBCache);
+);
 cache.init();
 ```
 ## Basic Configuration
@@ -71,6 +70,8 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 300 seconds.
 - `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
+- `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `lmdb`, or `rocksdb`.
+- `kafkacache.data.dir` - The root directory for backing cache storage.  Defaults to `/tmp`.
 
 Configuration properties can be passed as follows:
 

@@ -70,7 +70,7 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 300 seconds.
 - `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
-- `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `lmdb`, or `rocksdb`.
+- `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `lmdb`, `mapdb` or `rocksdb`.
 - `kafkacache.data.dir` - The root directory for backing cache storage.  Defaults to `/tmp`.
 
 Configuration properties can be passed as follows:

@@ -80,7 +80,7 @@ public class MapDBCache<K, V> extends PersistentCache<K, V> {
     protected void openDB() {
         try {
             db = DBMaker.fileDB(new File(dbDir(), "map.db"))
-                .fileMmapEnable()
+                .fileMmapEnableIfSupported()
                 .make();
             map = db.treeMap(name())
                 .keySerializer(new CustomSerializerByteArray<>(keySerde(), comparator()))

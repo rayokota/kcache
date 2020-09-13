@@ -25,6 +25,7 @@ import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
+import com.sleepycat.je.Transaction;
 import io.kcache.KeyValue;
 import io.kcache.KeyValueIterator;
 import io.kcache.exceptions.CacheInitializationException;
@@ -94,12 +95,14 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
             // Environment and database opens
             EnvironmentConfig envConfig = new EnvironmentConfig();
             envConfig.setAllowCreate(true);
+            envConfig.setTransactional(true);
             env = new Environment(dbDir(), envConfig);
 
             DatabaseConfig dbConfig = new DatabaseConfig();
             dbConfig.setAllowCreate(true);
-            dbConfig.setBtreeComparator(new KeyBytesComparator<>(keySerde(), comparator()));
+            dbConfig.setTransactional(true);
             dbConfig.setKeyPrefixing(true);
+            dbConfig.setBtreeComparator(new KeyBytesComparator<>(keySerde(), comparator()));
             db = env.openDatabase(null, name(), dbConfig);
         } catch (final Exception e) {
             throw new CacheInitializationException("Error opening store " + name() + " at location " + dbDir(), e);
@@ -128,13 +131,15 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
         validateStoreOpen();
+        Transaction txn = env.beginTransaction(null, null);
         for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
             byte[] keyBytes = keySerde().serializer().serialize(null, entry.getKey());
             DatabaseEntry dbKey = new DatabaseEntry(keyBytes);
             byte[] valueBytes = valueSerde().serializer().serialize(null, entry.getValue());
             DatabaseEntry dbValue = new DatabaseEntry(valueBytes);
-            db.put(null, dbKey, dbValue);
+            db.put(txn, dbKey, dbValue);
         }
+        txn.commit();
     }
 
     @Override

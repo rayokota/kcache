@@ -36,6 +36,7 @@
         <module>kcache-lmdb</module>
         <module>kcache-mapdb</module>
         <module>kcache-rocksdb</module>
+        <module>kcache-benchmark</module>
     </modules>
 
     <properties>

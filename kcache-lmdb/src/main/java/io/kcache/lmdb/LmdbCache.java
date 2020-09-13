@@ -84,7 +84,7 @@ public class LmdbCache<K, V> extends PersistentCache<K, V> {
             env = Env.create()
                 .setMapSize(Integer.MAX_VALUE)
                 .setMaxDbs(1)
-                .setMaxReaders(8)
+                .setMaxReaders(64)
                 .open(dbDir());
             db = env.openDbi(name(), new KeyBufferComparator<>(keySerde(), comparator()), MDB_CREATE);
         } catch (final Exception e) {

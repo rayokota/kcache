@@ -12,4 +12,8 @@
         <Class name="io.kcache.utils.KeyComparator"/>
         <Bug pattern="SE_BAD_FIELD"/>
     </Match>
+    <!-- exclude generated code -->
+    <Match>
+        <Class name="~io.kcache.benchmark.generated.*"/>
+    </Match>
 </FindBugsFilter>

@@ -14,6 +14,6 @@
     </Match>
     <!-- exclude generated code -->
     <Match>
-        <Class name="~io.kcache.benchmark.generated.*"/>
+        <Class name="~io.kcache.benchmark.jmh_generated.*"/>
     </Match>
 </FindBugsFilter>

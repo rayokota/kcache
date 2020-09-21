@@ -25,12 +25,12 @@ JMH parameters of interest may include the number of forks to use (`-f`), the nu
 measurement iterations (`-wi` and `-i`, respectively), the duration of each iteration
 (`-w` and `-r` for warmup and measurement iterations, respectively, with units of seconds),
 and the number of threads (`-t`).
-By default, `PersistentCacheBenchmark.java` is set up to run with 3 forks, 3 warmup iterations, 3 measurement
-iterations, 10 seconds per iteration, and 4 threads.
+By default, `PersistentCacheBenchmark.java` is set up to run with 1 fork, 3 warmup iterations, and 3 measurement
+iterations.
 
-As an example, to run benchmarks with 8 threads and only a single fork:
+As an example, to run benchmarks with only one warmup iteration:
 ```
-java -jar ./target/benchmarks.jar -t 8 -f 1
+java -jar ./target/benchmarks.jar -wi 1
 ```
 
 The full list of JMH command line options can be viewed with:

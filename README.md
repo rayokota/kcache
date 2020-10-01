@@ -27,7 +27,7 @@ Releases of KCache are deployed to Maven Central.
 
 ## Usage
 
-An instance of `KafkaCache` implements the `java.util.Map` interface.  Here is an example usage:
+An instance of `KafkaCache` implements the `java.util.SortedMap` interface.  Here is an example usage:
 
 ```java
 import io.kcache.*;

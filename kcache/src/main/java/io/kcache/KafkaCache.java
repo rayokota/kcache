@@ -781,7 +781,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
                 count = records.count();
                 cacheUpdateHandler.checkpoint(count);
-                if (localCache.isPersistent()) {
+                if (localCache.isPersistent() && initialized.get()) {
                     try {
                         localCache.flush();
                         checkpointOffsets();

@@ -766,8 +766,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     oldMessage == null ? null : valueSerde.serializer().serialize(topic, oldMessage)
                                 );
                                 producer.send(producerRecord);
+                                log.warn("Ignore invalid update to key {}", messageKey);
                             } catch (KafkaException ke) {
-                                log.error("Failed to recover from invalid update", ke);
+                                log.error("Failed to recover from invalid update to key {}", messageKey, ke);
                             }
                         }
                     } catch (Exception se) {

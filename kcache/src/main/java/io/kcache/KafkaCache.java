@@ -758,17 +758,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             }
                             cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
                         } else {
-                            if (!localCache.containsKey(messageKey)) {
-                                try {
-                                    ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                                        topic,
-                                        record.key(),
-                                        null
-                                    );
-                                    producer.send(producerRecord);
-                                } catch (KafkaException ke) {
-                                    log.warn("Failed to tombstone invalid update", ke);
-                                }
+                            V oldMessage = localCache.get(messageKey);
+                            try {
+                                ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                                    topic,
+                                    record.key(),
+                                    oldMessage == null ? null : valueSerde.serializer().serialize(topic, oldMessage)
+                                );
+                                producer.send(producerRecord);
+                            } catch (KafkaException ke) {
+                                log.error("Failed to recover from invalid update", ke);
                             }
                         }
                     } catch (Exception se) {

@@ -572,7 +572,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         if (producer != null) {
             producer.close();
-            log.debug("Kafka cache producer shut down for {}", clientId);
+            log.info("Kafka cache producer shut down for {}", clientId);
         }
         localCache.close();
         if (checkpointFile != null) {
@@ -682,7 +682,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private void readToEndOffsets() throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
-            log.trace("Reading to end of offsets {}", endOffsets);
+            log.info("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
             while (!hasReadToEndOffsets(endOffsets)) {

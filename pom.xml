@@ -53,7 +53,7 @@
         <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.1</lmdb.version>
         <mapdb.version>3.0.8</mapdb.version>
-        <rocksdb.version>6.7.3</rocksdb.version>
+        <rocksdb.version>6.13.3</rocksdb.version>
         <scala.version>${kafka.scala.version}.3</scala.version>
         <sl4j.version>1.7.30</sl4j.version>
     </properties>

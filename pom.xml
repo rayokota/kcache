@@ -3,7 +3,7 @@
 
     <groupId>io.kcache</groupId>
     <artifactId>kcache-parent</artifactId>
-    <version>3.3.3-SNAPSHOT</version>
+    <version>3.3.3</version>
     <packaging>pom</packaging>
 
     <name>kcache</name>
@@ -27,7 +27,7 @@
         <connection>scm:git:git://github.com:rayokota/kcache.git</connection>
         <developerConnection>scm:git:git@github.com:rayokota/kcache.git</developerConnection>
         <url>git@github.com:rayokota/kcache.git</url>
-        <tag>HEAD</tag>
+        <tag>kcache-parent-3.3.3</tag>
     </scm>
 
     <modules>

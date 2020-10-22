@@ -82,7 +82,7 @@ public class OffsetCheckpoint implements Closeable {
         final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
             channel.close();
-            throw new IOException("Could not obtain file lock");
+            throw new IOException("Could not obtain file lock " + lockFile);
         }
         this.channel = channel;
         this.fileLock = fileLock;

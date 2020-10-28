@@ -670,7 +670,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                 }
             } else {
-                log.info("Seeking to beginning for all partitions");
+                log.info("Seeking to beginning for all partitions for topic {}", topic);
                 consumer.seekToBeginning(topicPartitions);
             }
 

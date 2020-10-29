@@ -68,9 +68,9 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG = "kafkacache.topic.num.partitions";
     public static final int DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS = 1;
     /**
-     * <code>kafkacache.topic.skip.verify</code>
+     * <code>kafkacache.topic.skip.validation</code>
      */
-    public static final String KAFKACACHE_TOPIC_SKIP_VERIFY_CONFIG = "kafkacache.topic.skip.verify";
+    public static final String KAFKACACHE_TOPIC_SKIP_VALIDATION_CONFIG = "kafkacache.topic.skip.validation";
     /**
      * <code>kafkacache.topic.require.compact</code>
      */
@@ -153,8 +153,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "will be the smaller of this value and the number of live Kafka brokers.";
     protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
         "The desired number of partitions factor for the topic.";
-    protected static final String KAFKACACHE_TOPIC_SKIP_VERIFY_DOC =
-        "Whether to skip topic verification.";
+    protected static final String KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC =
+        "Whether to skip topic validation.";
     protected static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC =
         "Whether to require that the topic is compacted.";
     protected static final String KAFKACACHE_INIT_TIMEOUT_DOC =
@@ -241,8 +241,8 @@ public class KafkaCacheConfig extends AbstractConfig {
                 DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC
             )
-            .define(KAFKACACHE_TOPIC_SKIP_VERIFY_CONFIG, ConfigDef.Type.BOOLEAN, false,
-                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_SKIP_VERIFY_DOC
+            .define(KAFKACACHE_TOPIC_SKIP_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN, false,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC
             )
             .define(KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG, ConfigDef.Type.BOOLEAN, true,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC

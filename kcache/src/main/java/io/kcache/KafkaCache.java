@@ -88,7 +88,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private AtomicBoolean initialized = new AtomicBoolean(false);
-    private boolean skipVerify;
+    private boolean skipValidation;
     private boolean requireCompact;
     private int initTimeout;
     private int timeout;
@@ -148,7 +148,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (this.clientId == null) {
             this.clientId = "kafka-cache-reader-" + this.topic;
         }
-        this.skipVerify = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_SKIP_VERIFY_CONFIG);
+        this.skipValidation = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_SKIP_VALIDATION_CONFIG);
         this.requireCompact = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
@@ -226,7 +226,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         localCache.init();
 
-        if (!skipVerify) {
+        if (!skipValidation) {
             createOrVerifyTopic();
         }
         this.producer = createProducer();
@@ -362,7 +362,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             topicDescription = admin.describeTopics(topics).all().get(initTimeout, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
-                log.warn("Could not verify existing topic.");
+                log.warn("Could not validate existing topic.");
                 return;
             } else {
                 throw e;

@@ -96,4 +96,4 @@ KCache supports both SSL authentication and SASL authentication to a secure Kafk
 
 KCache can be used as a replicated cache, with some caveats.  To ensure that updates are processed in the proper order, one instance of KCache should be designated as the sole writer, with all writes being forwarded to it.  If the writer fails, another instance can then be elected as the new writer.  
 
-As an example of a highly-available service that wraps KCache, see [Keta](https://github.com/rayokota/keta).
+For an example of a highly-available service that wraps KCache, see [Keta](https://github.com/rayokota/keta).

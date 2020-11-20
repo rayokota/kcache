@@ -76,6 +76,10 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG = "kafkacache.topic.require.compact";
     /**
+     * <code>kafkacache.topic.read.only</code>
+     */
+    public static final String KAFKACACHE_TOPIC_READ_ONLY_CONFIG = "kafkacache.topic.read.only";
+    /**
      * <code>kafkacache.timeout.ms</code>
      */
     public static final String KAFKACACHE_TIMEOUT_CONFIG = "kafkacache.timeout.ms";
@@ -157,6 +161,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "Whether to skip topic validation.";
     protected static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC =
         "Whether to require that the topic is compacted.";
+    protected static final String KAFKACACHE_TOPIC_READ_ONLY_DOC =
+        "Whether the topic is only used for reading, and thus no writes are allowed.";
     protected static final String KAFKACACHE_INIT_TIMEOUT_DOC =
         "The timeout for initialization of the Kafka cache, including creation of the Kafka topic "
             + "that stores data.";
@@ -246,6 +252,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG, ConfigDef.Type.BOOLEAN, true,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC
+            )
+            .define(KAFKACACHE_TOPIC_READ_ONLY_CONFIG, ConfigDef.Type.BOOLEAN, false,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_READ_ONLY_DOC
             )
             .define(KAFKACACHE_INIT_TIMEOUT_CONFIG, ConfigDef.Type.INT, 300000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_INIT_TIMEOUT_DOC

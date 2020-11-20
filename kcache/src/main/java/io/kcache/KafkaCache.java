@@ -90,6 +90,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private AtomicBoolean initialized = new AtomicBoolean(false);
     private boolean skipValidation;
     private boolean requireCompact;
+    private boolean readOnly;
     private int initTimeout;
     private int timeout;
     private String checkpointDir;
@@ -150,6 +151,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         this.skipValidation = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_SKIP_VALIDATION_CONFIG);
         this.requireCompact = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_REQUIRE_COMPACT_CONFIG);
+        this.readOnly = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_READ_ONLY_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
@@ -229,8 +231,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (!skipValidation) {
             createOrVerifyTopic();
         }
-        this.producer = createProducer();
         this.consumer = createConsumer();
+        if (!readOnly) {
+            this.producer = createProducer();
+        }
 
         // start the background thread that subscribes to the Kafka topic and applies updates.
         // the thread must be created after the topic has been created.
@@ -296,8 +300,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Set<String> allTopics = admin.listTopics().names().get(initTimeout, TimeUnit.MILLISECONDS);
             if (allTopics.contains(topic)) {
                 verifyTopic(admin);
-            } else {
+            } else if (!readOnly){
                 createTopic(admin);
+            } else {
+                throw new CacheInitializationException("Topic does not exist " + topic + " and cache is configured read-only");
             }
         } catch (TimeoutException e) {
             throw new CacheInitializationException(
@@ -446,6 +452,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (key == null) {
             throw new CacheException("Key should not be null");
         }
+        if (readOnly) {
+            throw new CacheException("Cache is read-only");
+        }
 
         assertInitialized();
         V oldValue = get(key);
@@ -495,6 +504,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public V remove(Object key) {
+        if (readOnly) {
+            throw new CacheException("Cache is read-only");
+        }
         assertInitialized();
         // delete from the Kafka topic by writing a null value for the key
         return put((K) key, null);
@@ -508,19 +520,19 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public Set<K> keySet() {
         assertInitialized();
-        return localCache.keySet();
+        return readOnly ? Collections.unmodifiableSet(localCache.keySet()) : localCache.keySet();
     }
 
     @Override
     public Collection<V> values() {
         assertInitialized();
-        return localCache.values();
+        return readOnly ? Collections.unmodifiableCollection(localCache.values()) : localCache.values();
     }
 
     @Override
     public Set<Map.Entry<K, V>> entrySet() {
         assertInitialized();
-        return localCache.entrySet();
+        return readOnly ? Collections.unmodifiableSet(localCache.entrySet()) : localCache.entrySet();
     }
 
     @Override
@@ -761,7 +773,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 oldMessage = localCache.put(messageKey, message);
                             }
                             cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
-                        } else {
+                        } else if (!readOnly){
                             V oldMessage = localCache.get(messageKey);
                             try {
                                 ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
@@ -774,6 +786,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             } catch (KafkaException ke) {
                                 log.error("Failed to recover from invalid update to key {}", messageKey, ke);
                             }
+                        } else {
+                            log.warn("Ignore invalid update to key {}", messageKey);
                         }
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic "

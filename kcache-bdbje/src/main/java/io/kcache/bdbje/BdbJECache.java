@@ -21,6 +21,7 @@ import com.sleepycat.je.CursorConfig;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseEntry;
+import com.sleepycat.je.Durability;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import com.sleepycat.je.LockMode;
@@ -96,6 +97,8 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
             EnvironmentConfig envConfig = new EnvironmentConfig();
             envConfig.setAllowCreate(true);
             envConfig.setTransactional(true);
+            // Data is synced in flush()
+            envConfig.setDurability(Durability.COMMIT_NO_SYNC);
             env = new Environment(dbDir(), envConfig);
 
             DatabaseConfig dbConfig = new DatabaseConfig();

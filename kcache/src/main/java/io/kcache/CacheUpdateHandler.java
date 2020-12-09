@@ -24,6 +24,12 @@ import java.io.IOException;
 public interface CacheUpdateHandler<K, V> extends Closeable {
 
     /**
+     * Invoked after the cache is initialized.
+     */
+    default void cacheInitialized() {
+    }
+
+    /**
      * Invoked before every new K,V pair written to the cache
      *
      * @param key   key associated with the data

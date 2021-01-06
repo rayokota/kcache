@@ -20,9 +20,8 @@ import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.InMemoryCache;
-import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
-import java.lang.reflect.Constructor;
+import io.kcache.utils.ShutdownableThread;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -55,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -289,7 +289,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     private void addKafkaCacheConfigsToClientProperties(Properties props) {
-        props.putAll(config.originalsWithPrefix("kafkacache."));
+        // remove kcache used properties before passing on to delegated consumer and producer
+        // to avoid warnings
+        // thus unused props are  those that kcache should propagate
+
+        Map<String, Object> unusedProps = config.originals().entrySet().stream()
+            .filter(kv -> config.unused().contains(kv.getKey()))
+            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        KafkaCacheConfig vettedConfig = new KafkaCacheConfig(unusedProps);
+        props.putAll(vettedConfig.originalsWithPrefix("kafkacache."));
     }
 
     private void createOrVerifyTopic() throws CacheInitializationException {

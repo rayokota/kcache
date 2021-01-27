@@ -180,6 +180,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
                     break;
+                case CAFFEINE:
+                    clsName = "io.kcache.caffeine.CaffeineCache";
+                    break;
                 case LMDB:
                     clsName = "io.kcache.lmdb.LmdbCache";
                     break;
@@ -774,7 +777,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 oldMessage = localCache.put(messageKey, message);
                             }
                             cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
-                        } else if (!readOnly){
+                        } else if (!readOnly) {
                             V oldMessage = localCache.get(messageKey);
                             try {
                                 ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(

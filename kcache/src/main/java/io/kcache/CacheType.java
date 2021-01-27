@@ -25,6 +25,7 @@ import java.util.Map;
 public enum CacheType {
     MEMORY,
     BDBJE,
+    CAFFEINE,
     LMDB,
     MAPDB,
     ROCKSDB;

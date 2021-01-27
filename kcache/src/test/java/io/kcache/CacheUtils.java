@@ -82,7 +82,10 @@ public class CacheUtils {
         return createAndInitKafkaCacheInstance(bootstrapServers, inMemoryCache, props);
     }
 
-    private static Cache<String, String> createAndInitKafkaCacheInstance(
+    /**
+     * Initialize a KafkaCache.
+     */
+    public static Cache<String, String> createAndInitKafkaCacheInstance(
         String bootstrapServers, Cache<String, String> inMemoryCache,
         Properties props)
         throws CacheInitializationException {

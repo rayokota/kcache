@@ -33,6 +33,7 @@
     <modules>
         <module>kcache</module>
         <module>kcache-bdbje</module>
+        <module>kcache-caffeine</module>
         <module>kcache-lmdb</module>
         <module>kcache-mapdb</module>
         <module>kcache-rocksdb</module>
@@ -46,6 +47,7 @@
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <bouncycastle.version>1.67</bouncycastle.version>
+        <caffeine.version>2.8.8</caffeine.version>
         <kafka.version>2.6.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <guava.version>29.0-jre</guava.version>
@@ -74,6 +76,11 @@
                 <groupId>com.sleepycat</groupId>
                 <artifactId>je</artifactId>
                 <version>${bdbje.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.lmdbjava</groupId>

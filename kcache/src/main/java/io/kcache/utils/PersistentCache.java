@@ -364,7 +364,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         }
 
         public void putAll(Map<? extends K, ? extends V> entries) {
-            for (Entry<? extends K, ? extends V> e : m.entrySet()) {
+            for (Entry<? extends K, ? extends V> e : entries.entrySet()) {
                 put(e.getKey(), e.getValue());
             }
         }

@@ -8,7 +8,7 @@
     </parent>
 
     <groupId>io.kcache</groupId>
-    <artifactId>kcache-bdbje</artifactId>
+    <artifactId>kcache-caffeine</artifactId>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -41,8 +41,8 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.sleepycat</groupId>
-            <artifactId>je</artifactId>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
         <!-- TESTING -->
         <dependency>

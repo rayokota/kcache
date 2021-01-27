@@ -14,13 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.kcache.caffeine;
+package io.kcache.utils;
 
-import com.github.benmanes.caffeine.cache.CacheWriter;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
-import com.github.benmanes.caffeine.cache.Scheduler;
-import io.kcache.utils.InMemoryCache;
+import com.google.common.cache.CacheBuilder;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
@@ -28,69 +24,59 @@ import java.util.Map;
 /**
  * An in-memory cache with bounded size.
  */
-public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
+public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
 
-    private final com.github.benmanes.caffeine.cache.Cache<K, V> cache;
+    private final com.google.common.cache.Cache<K, V> cache;
 
-    public CaffeineCache(Comparator<? super K> comparator) {
+    public InMemoryBoundedCache(Comparator<? super K> comparator) {
         this(null, null, comparator);
     }
 
-    public CaffeineCache(Integer maximumSize, Duration expireAfterWrite) {
+    public InMemoryBoundedCache(Integer maximumSize, Duration expireAfterWrite) {
         super();
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    public CaffeineCache(Integer maximumSize, Duration expireAfterWrite,
+    public InMemoryBoundedCache(Integer maximumSize, Duration expireAfterWrite,
         Comparator<? super K> comparator) {
         super(comparator);
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    private com.github.benmanes.caffeine.cache.Cache<K, V> createCache(
+    @SuppressWarnings("unchecked")
+    private com.google.common.cache.Cache<K, V> createCache(
         Integer maximumSize, Duration expireAfterWrite) {
-        Caffeine<K, V> caffeine = Caffeine.newBuilder()
-            .writer(new CacheWriter<K, V>() {
-                public void write(K key, V value) {
-                    delegate().put(key, value);
-                }
-
-                public void delete(K key, V value, RemovalCause cause) {
-                    delegate().remove(key, value);
-                }
-            });
+        CacheBuilder<?, ?> cacheBuilder = CacheBuilder.newBuilder();
         if (maximumSize != null && maximumSize >= 0) {
-            caffeine = caffeine.maximumSize(maximumSize);
+            cacheBuilder = cacheBuilder.maximumSize(maximumSize);
         }
         if (expireAfterWrite != null && !expireAfterWrite.isNegative()) {
-            caffeine = caffeine
-                .scheduler(Scheduler.systemScheduler())
-                .expireAfterWrite(expireAfterWrite);
+            cacheBuilder = cacheBuilder.expireAfterWrite(expireAfterWrite);
         }
-        return caffeine.build();
+        return (com.google.common.cache.Cache<K, V>) cacheBuilder.build();
     }
 
     @Override
     public V put(final K key, final V value) {
-        final V originalValue = get(key);
         cache.put(key, value);
-        return originalValue;
+        return super.put(key, value);
     }
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
         cache.putAll(entries);
+        super.putAll(entries);
     }
 
     @Override
     public V remove(final Object key) {
-        final V originalValue = get(key);
         cache.invalidate(key);
-        return originalValue;
+        return super.remove(key);
     }
 
     @Override
     public void clear() {
         cache.invalidateAll();
+        super.clear();
     }
 }

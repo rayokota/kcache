@@ -92,6 +92,14 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_BACKING_CACHE_CONFIG = "kafkacache.backing.cache";
     /**
+     * <code>kafkacache.bounded.cache.size</code>
+     */
+    public static final String KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG = "kafkacache.bounded.cache.size";
+    /**
+     * <code>kafkacache.bounded.cache.expiry.secs</code>
+     */
+    public static final String KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG = "kafkacache.bounded.cache.expiry.secs";
+    /**
      * <code>kafkacache.checkpoint.dir</code>
      */
     public static final String KAFKACACHE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
@@ -170,6 +178,10 @@ public class KafkaCacheConfig extends AbstractConfig {
         "The timeout for an operation on the Kafka cache.";
     protected static final String KAFKACACHE_BACKING_CACHE_DOC =
         "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, and `rocksdb`.";
+    protected static final String KAFKACACHE_BOUNDED_CACHE_SIZE_DOC =
+        "For an in-memory cache, the maximum size of the cache.";
+    protected static final String KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_DOC =
+        "For an in-memory cache, the expiration in seconds for entries added to the cache.";
     protected static final String KAFKACACHE_CHECKPOINT_DIR_DOC =
         "For persistent backing caches, the directory in which to store offset checkpoints.";
     protected static final String KAFKACACHE_DATA_DIR_DOC =
@@ -266,6 +278,12 @@ public class KafkaCacheConfig extends AbstractConfig {
                 CacheType.MEMORY.name().toLowerCase(Locale.ROOT),
                 new EnumRecommender<>(CacheType.class, e -> e.toLowerCase(Locale.ROOT)),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_BACKING_CACHE_DOC
+            )
+            .define(KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, -1,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_BOUNDED_CACHE_SIZE_DOC
+            )
+            .define(KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, -1,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_DOC
             )
             .define(KAFKACACHE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_DIR_DOC

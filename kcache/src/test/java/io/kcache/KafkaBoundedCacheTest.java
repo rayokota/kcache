@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
-package io.kcache.caffeine;
+package io.kcache;
 
-import io.kcache.CacheType;
-import io.kcache.KafkaCacheConfig;
-import io.kcache.KafkaCacheTest;
 import java.util.Properties;
 
-public class KafkaCaffeineCacheTest extends KafkaCacheTest {
+public class KafkaBoundedCacheTest extends KafkaCacheTest {
 
     @Override
     protected Properties getKafkaCacheProperties() {
         Properties props = super.getKafkaCacheProperties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.CAFFEINE.name().toLowerCase());
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());
         props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, 1);
         return props;
     }

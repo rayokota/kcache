@@ -19,6 +19,7 @@ package io.kcache;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
+import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
@@ -173,11 +174,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             CacheType cacheType = CacheType.get(
                 config.getString(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG));
+            int maxSize = config.getInt(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG);
+            int expiry = config.getInt(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG);
             String clsName = null;
             boolean isPersistent = false;
             switch (cacheType) {
                 case MEMORY:
-                    return new InMemoryCache<>(cmp);
+                    return maxSize >= 0 || expiry >= 0
+                        ? new InMemoryBoundedCache<K, V>(maxSize, Duration.ofSeconds(expiry), cmp)
+                        : new InMemoryCache<>(cmp);
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
                     isPersistent = true;
@@ -206,8 +211,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     String.class, String.class, Serde.class, Serde.class, Comparator.class);
                 return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
             } else {
-                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(Comparator.class);
-                return ctor.newInstance(cmp);
+                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
+                    Integer.class, Duration.class, Comparator.class);
+                return ctor.newInstance(maxSize, Duration.ofSeconds(expiry), cmp);
             }
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);

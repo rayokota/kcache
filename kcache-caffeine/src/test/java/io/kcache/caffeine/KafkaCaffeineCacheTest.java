@@ -16,17 +16,17 @@
 
 package io.kcache.caffeine;
 
-import io.kcache.Cache;
-import io.kcache.CacheUtils;
+import io.kcache.CacheType;
+import io.kcache.KafkaCacheConfig;
 import io.kcache.KafkaCacheTest;
 import java.util.Properties;
 
-public class CaffeineCacheTest extends KafkaCacheTest {
+public class KafkaCaffeineCacheTest extends KafkaCacheTest {
 
     @Override
-    protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> caffeineCache = new CaffeineCache<>(1L, null);
-        return CacheUtils.createAndInitKafkaCacheInstance(bootstrapServers, caffeineCache,
-            new Properties());
+    protected Properties getKafkaCacheProperties() {
+        Properties props = super.getKafkaCacheProperties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.CAFFEINE.name().toLowerCase());
+        return props;
     }
 }

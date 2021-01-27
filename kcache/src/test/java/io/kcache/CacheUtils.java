@@ -18,7 +18,6 @@ package io.kcache;
 
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.Caches;
-import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.StringUpdateHandler;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -33,35 +32,36 @@ public class CacheUtils {
     /**
      * Get a new instance of a KafkaCache and initialize it.
      */
-    public static Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers)
+    public static Cache<String, String> createAndInitKafkaCacheInstance(Properties props)
         throws CacheInitializationException {
-        Cache<String, String> inMemoryCache = new InMemoryCache<>();
-        return createAndInitKafkaCacheInstance(bootstrapServers, inMemoryCache,
-            new Properties());
+        KafkaCacheConfig config = new KafkaCacheConfig(props);
+        Cache<String, String> kafkaCache = Caches.concurrentCache(
+            new KafkaCache<>(config,
+                Serdes.String(),
+                Serdes.String(),
+                new StringUpdateHandler(),
+                null));
+        kafkaCache.init();
+        return kafkaCache;
     }
-
     /**
      * Get a new instance of an SASL KafkaCache and initialize it.
      */
-    public static Cache<String, String> createAndInitSASLCacheInstance(
-        String bootstrapServers)
+    public static Cache<String, String> createAndInitSASLCacheInstance(Properties props)
         throws CacheInitializationException {
-        Properties props = new Properties();
 
         props.put(KafkaCacheConfig.KAFKACACHE_SECURITY_PROTOCOL_CONFIG,
             SecurityProtocol.SASL_PLAINTEXT.toString());
 
-        Cache<String, String> inMemoryCache = new InMemoryCache<>();
-        return createAndInitKafkaCacheInstance(bootstrapServers, inMemoryCache, props);
+        return createAndInitKafkaCacheInstance(props);
     }
 
     /**
      * Get a new instance of an SSL KafkaCache and initialize it.
      */
     public static Cache<String, String> createAndInitSSLKafkaCacheInstance(
-        String bootstrapServers, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
+        Properties props, Map<String, Object> sslConfigs, boolean requireSSLClientAuth)
         throws CacheInitializationException {
-        Properties props = new Properties();
 
         props.put(KafkaCacheConfig.KAFKACACHE_SECURITY_PROTOCOL_CONFIG,
             SecurityProtocol.SSL.toString());
@@ -78,26 +78,6 @@ public class CacheUtils {
                 ((Password) sslConfigs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)).value());
         }
 
-        Cache<String, String> inMemoryCache = new InMemoryCache<>();
-        return createAndInitKafkaCacheInstance(bootstrapServers, inMemoryCache, props);
-    }
-
-    /**
-     * Initialize a KafkaCache.
-     */
-    public static Cache<String, String> createAndInitKafkaCacheInstance(
-        String bootstrapServers, Cache<String, String> inMemoryCache,
-        Properties props)
-        throws CacheInitializationException {
-        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        KafkaCacheConfig config = new KafkaCacheConfig(props);
-        Cache<String, String> kafkaCache = Caches.concurrentCache(
-            new KafkaCache<>(config,
-                Serdes.String(),
-                Serdes.String(),
-                new StringUpdateHandler(),
-                inMemoryCache));
-        kafkaCache.init();
-        return kafkaCache;
+        return createAndInitKafkaCacheInstance(props);
     }
 }

@@ -19,6 +19,7 @@ package io.kcache;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
+import java.util.Properties;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -34,6 +35,8 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaCacheTest.class);
 
+    protected final String topic = KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
+
     @Before
     public void setup() {
         log.debug("bootstrapservers = {}", bootstrapServers);
@@ -46,20 +49,20 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testInitialization() throws IOException {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         kafkaCache.close();
     }
 
     @Test(expected = CacheInitializationException.class)
     public void testDoubleInitialization() throws Exception {
-        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
             kafkaCache.init();
         }
     }
 
     @Test
     public void testSimplePut() throws Exception {
-        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
             String key = "Kafka";
             String value = "Rocks";
             kafkaCache.put(key, value);
@@ -70,7 +73,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleGetAfterFailure() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         String key = "Kafka";
         String value = "Rocks";
         String retrievedValue;
@@ -91,7 +94,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
 
         // recreate kafka store
-        kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        kafkaCache = createAndInitKafkaCacheInstance();
         try {
             try {
                 retrievedValue = kafkaCache.get(key);
@@ -106,7 +109,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleDelete() throws Exception {
-        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
             String key = "Kafka";
             String value = "Rocks";
             try {
@@ -138,7 +141,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testDeleteAfterRestart() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         String key = "Kafka";
         String value = "Rocks";
         try {
@@ -169,7 +172,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
             assertNull("Value should have been deleted", retrievedValue);
             kafkaCache.close();
             // recreate kafka store
-            kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+            kafkaCache = createAndInitKafkaCacheInstance();
             // verify that key still doesn't exist in the store
             retrievedValue = value;
             try {
@@ -183,7 +186,15 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
     }
 
-    protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        return CacheUtils.createAndInitKafkaCacheInstance(bootstrapServers);
+    protected Cache<String, String> createAndInitKafkaCacheInstance() {
+        Properties props = getKafkaCacheProperties();
+        return CacheUtils.createAndInitKafkaCacheInstance(props);
+    }
+
+    protected Properties getKafkaCacheProperties() {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());
+        return props;
     }
 }

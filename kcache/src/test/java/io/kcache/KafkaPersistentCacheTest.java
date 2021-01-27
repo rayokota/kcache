@@ -19,15 +19,12 @@ package io.kcache;
 import static org.junit.Assert.assertEquals;
 
 import io.kcache.exceptions.CacheException;
-import io.kcache.utils.Caches;
 import io.kcache.utils.OffsetCheckpoint;
-import io.kcache.utils.StringUpdateHandler;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Serdes;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,8 +39,6 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
     @Rule
     public final TemporaryFolder dir = new TemporaryFolder();
 
-    protected final String topic = KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
-
     @After
     @Override
     public void teardown() throws IOException {
@@ -54,20 +49,6 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
     }
 
     @Override
-    protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Properties props = getKafkaCacheProperties();
-        KafkaCacheConfig config = new KafkaCacheConfig(props);
-        Cache<String, String> kafkaCache = Caches.concurrentCache(
-            new KafkaCache<>(config,
-                Serdes.String(),
-                Serdes.String(),
-                new StringUpdateHandler(),
-                topic,
-                null));
-        kafkaCache.init();
-        return kafkaCache;
-    }
-
     protected Properties getKafkaCacheProperties() {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -78,7 +59,7 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
 
     @Test
     public void testCheckpointBeforeAndAfterRestart() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         String key = "Kafka";
         String value = "Rocks";
         String key2 = "Hello";
@@ -103,7 +84,7 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
             assertEquals(result, offsets);
 
             // recreate kafka store
-            kafkaCache = createAndInitKafkaCacheInstance(bootstrapServers);
+            kafkaCache = createAndInitKafkaCacheInstance();
             try {
                 kafkaCache.put(key2, value2);
             } catch (CacheException e) {

@@ -24,14 +24,19 @@ import io.kcache.utils.InMemoryCache;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.NavigableMap;
 
 /**
  * An in-memory cache with bounded size.
  */
 public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
 
+    public static final long DEFAULT_MAXIMUM_SIZE = 100;
+
     private final com.github.benmanes.caffeine.cache.Cache<K, V> cache;
+
+    public CaffeineCache(Comparator<? super K> comparator) {
+        this(comparator, DEFAULT_MAXIMUM_SIZE, null);
+    }
 
     public CaffeineCache(Long maximumSize, Duration expireAfterWrite) {
         super();
@@ -41,11 +46,6 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
     public CaffeineCache(Comparator<? super K> comparator,
         Long maximumSize, Duration expireAfterWrite) {
         super(comparator);
-        this.cache = createCache(maximumSize, expireAfterWrite);
-    }
-
-    public CaffeineCache(NavigableMap<K, V> delegate, Long maximumSize, Duration expireAfterWrite) {
-        super(delegate);
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 

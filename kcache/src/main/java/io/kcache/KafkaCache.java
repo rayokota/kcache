@@ -174,30 +174,41 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             CacheType cacheType = CacheType.get(
                 config.getString(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG));
             String clsName = null;
+            boolean isPersistent = false;
             switch (cacheType) {
                 case MEMORY:
                     return new InMemoryCache<>(cmp);
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
+                    isPersistent = true;
                     break;
                 case CAFFEINE:
                     clsName = "io.kcache.caffeine.CaffeineCache";
                     break;
                 case LMDB:
                     clsName = "io.kcache.lmdb.LmdbCache";
+                    isPersistent = true;
                     break;
                 case MAPDB:
                     clsName = "io.kcache.mapdb.MapDBCache";
+                    isPersistent = true;
                     break;
                 case ROCKSDB:
                     clsName = "io.kcache.rocksdb.RocksDBCache";
+                    isPersistent = true;
                     break;
             }
-            String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
-            Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class.forName(clsName);
-            Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
-                String.class, String.class, Serde.class, Serde.class, Comparator.class);
-            return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
+            Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class
+                .forName(clsName);
+            if (isPersistent) {
+                String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
+                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
+                    String.class, String.class, Serde.class, Serde.class, Comparator.class);
+                return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
+            } else {
+                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(Comparator.class);
+                return ctor.newInstance(cmp);
+            }
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);
         }

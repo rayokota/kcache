@@ -18,6 +18,7 @@ package io.kcache;
 
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.SASLClusterTestHarness;
+import java.util.Properties;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -25,25 +26,37 @@ import static org.junit.Assert.assertEquals;
 public class KafkaCacheSASLTest extends SASLClusterTestHarness {
     @Test
     public void testInitialization() throws Exception {
-        Cache<String, String> kafkaCache = CacheUtils.createAndInitSASLCacheInstance(bootstrapServers);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         kafkaCache.close();
     }
 
     @Test(expected = CacheInitializationException.class)
     public void testDoubleInitialization() throws Exception {
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitSASLCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
             kafkaCache.init();
         }
     }
 
     @Test
     public void testSimplePut() throws Exception {
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitSASLCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
             String key = "Kafka";
             String value = "Rocks";
             kafkaCache.put(key, value);
             String retrievedValue = kafkaCache.get(key);
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
         }
+    }
+
+    protected Cache<String, String> createAndInitKafkaCacheInstance() {
+        Properties props = getKafkaCacheProperties();
+        return CacheUtils.createAndInitSASLCacheInstance(props);
+    }
+
+    protected Properties getKafkaCacheProperties() {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());
+        return props;
     }
 }

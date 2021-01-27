@@ -73,9 +73,7 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
-        for (Entry<? extends K, ? extends V> e : entries.entrySet()) {
-            put(e.getKey(), e.getValue());
-        }
+        cache.putAll(entries);
     }
 
     @Override
@@ -83,5 +81,10 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
         final V originalValue = get(key);
         cache.invalidate(key);
         return originalValue;
+    }
+
+    @Override
+    public void clear() {
+        cache.invalidateAll();
     }
 }

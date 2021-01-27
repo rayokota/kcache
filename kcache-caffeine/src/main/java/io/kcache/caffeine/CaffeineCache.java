@@ -19,7 +19,9 @@ package io.kcache.caffeine;
 import com.github.benmanes.caffeine.cache.CacheWriter;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.github.benmanes.caffeine.cache.Scheduler;
 import io.kcache.utils.InMemoryCache;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -31,27 +33,25 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
 
     private final com.github.benmanes.caffeine.cache.Cache<K, V> cache;
 
-    public CaffeineCache(long maximumSize) {
+    public CaffeineCache(Long maximumSize, Duration expireAfterWrite) {
         super();
-        this.cache = createCache(maximumSize);
+        this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    public CaffeineCache(Comparator<? super K> comparator, long maximumSize) {
+    public CaffeineCache(Comparator<? super K> comparator,
+        Long maximumSize, Duration expireAfterWrite) {
         super(comparator);
-        this.cache = createCache(maximumSize);
+        this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    public CaffeineCache(NavigableMap<K, V> delegate, long maximumSize) {
+    public CaffeineCache(NavigableMap<K, V> delegate, Long maximumSize, Duration expireAfterWrite) {
         super(delegate);
-        this.cache = createCache(maximumSize);
+        this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    private com.github.benmanes.caffeine.cache.Cache<K, V> createCache(long maximumSize) {
-        if (maximumSize <= 0) {
-            throw new IllegalArgumentException("Maximum size of cache must be positive");
-        }
-        return Caffeine.newBuilder()
-            .maximumSize(maximumSize)
+    private com.github.benmanes.caffeine.cache.Cache<K, V> createCache(
+        Long maximumSize, Duration expireAfterWrite) {
+        Caffeine<K, V> caffeine = Caffeine.newBuilder()
             .writer(new CacheWriter<K, V>() {
                 public void write(K key, V value) {
                     delegate().put(key, value);
@@ -60,8 +60,19 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
                 public void delete(K key, V value, RemovalCause cause) {
                     delegate().remove(key, value);
                 }
-            })
-            .build();
+            });
+        if (maximumSize != null) {
+            if (maximumSize <= 0) {
+                throw new IllegalArgumentException("Maximum size of cache must be positive");
+            }
+            caffeine = caffeine.maximumSize(maximumSize);
+        }
+        if (expireAfterWrite != null) {
+            caffeine = caffeine
+                .scheduler(Scheduler.systemScheduler())
+                .expireAfterWrite(expireAfterWrite);
+        }
+        return caffeine.build();
     }
 
     @Override

@@ -25,7 +25,7 @@ public class CaffeineCacheTest extends KafkaCacheTest {
 
     @Override
     protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
-        Cache<String, String> caffeineCache = new CaffeineCache<>(1);
+        Cache<String, String> caffeineCache = new CaffeineCache<>(1L, null);
         return CacheUtils.createAndInitKafkaCacheInstance(bootstrapServers, caffeineCache,
             new Properties());
     }

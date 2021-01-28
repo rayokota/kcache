@@ -181,7 +181,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             switch (cacheType) {
                 case MEMORY:
                     return maxSize >= 0 || expiry >= 0
-                        ? new InMemoryBoundedCache<K, V>(maxSize, Duration.ofSeconds(expiry), cmp)
+                        ? new InMemoryBoundedCache<>(maxSize, Duration.ofSeconds(expiry), null, cmp)
                         : new InMemoryCache<>(cmp);
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
@@ -212,8 +212,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
             } else {
                 Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
-                    Integer.class, Duration.class, Comparator.class);
-                return ctor.newInstance(maxSize, Duration.ofSeconds(expiry), cmp);
+                    Integer.class, Duration.class, CacheLoader.class, Comparator.class);
+                return ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
             }
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);

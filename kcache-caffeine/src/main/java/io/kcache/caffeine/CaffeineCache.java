@@ -18,8 +18,10 @@ package io.kcache.caffeine;
 
 import com.github.benmanes.caffeine.cache.CacheWriter;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import io.kcache.CacheLoader;
 import io.kcache.utils.InMemoryCache;
 import java.time.Duration;
 import java.util.Comparator;
@@ -31,24 +33,36 @@ import java.util.Map;
 public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
 
     private final com.github.benmanes.caffeine.cache.Cache<K, V> cache;
+    private final CacheLoader<K, V> loader;
 
     public CaffeineCache(Comparator<? super K> comparator) {
-        this(null, null, comparator);
+        this(null, null, null, comparator);
     }
 
-    public CaffeineCache(Integer maximumSize, Duration expireAfterWrite) {
+    public CaffeineCache(
+        Integer maximumSize,
+        Duration expireAfterWrite,
+        CacheLoader<K, V> loader
+    ) {
         super();
+        this.loader = loader;
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    public CaffeineCache(Integer maximumSize, Duration expireAfterWrite,
-        Comparator<? super K> comparator) {
+    public CaffeineCache(
+        Integer maximumSize,
+        Duration expireAfterWrite,
+        CacheLoader<K, V> loader,
+        Comparator<? super K> comparator
+    ) {
         super(comparator);
+        this.loader = loader;
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
     private com.github.benmanes.caffeine.cache.Cache<K, V> createCache(
-        Integer maximumSize, Duration expireAfterWrite) {
+        Integer maximumSize, Duration expireAfterWrite
+    ) {
         Caffeine<K, V> caffeine = Caffeine.newBuilder()
             .writer(new CacheWriter<K, V>() {
                 public void write(K key, V value) {
@@ -67,7 +81,37 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
                 .scheduler(Scheduler.systemScheduler())
                 .expireAfterWrite(expireAfterWrite);
         }
-        return caffeine.build();
+        if (loader != null) {
+            return caffeine.build(
+                new com.github.benmanes.caffeine.cache.CacheLoader<K, V>() {
+                    @Override
+                    public V load(K key) throws Exception {
+                        V value = loader.load(key);
+                        if (value != null) {
+                            delegate().put(key, value);
+                        }
+                        return value;
+                    }
+                }
+            );
+        } else {
+            return caffeine.build();
+        }
+    }
+
+    @Override
+    public boolean containsKey(final Object key) {
+        return get(key) != null;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public V get(final Object key) {
+        if (loader != null) {
+            return ((LoadingCache<K, V>) cache).get((K) key);
+        } else {
+            return super.get(key);
+        }
     }
 
     @Override

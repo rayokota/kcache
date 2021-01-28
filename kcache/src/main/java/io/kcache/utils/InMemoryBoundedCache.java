@@ -17,6 +17,11 @@
 package io.kcache.utils;
 
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader.InvalidCacheLoadException;
+import com.google.common.cache.LoadingCache;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
+import io.kcache.CacheLoader;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
@@ -27,33 +32,85 @@ import java.util.Map;
 public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
 
     private final com.google.common.cache.Cache<K, V> cache;
+    private final CacheLoader<K, V> loader;
 
     public InMemoryBoundedCache(Comparator<? super K> comparator) {
-        this(null, null, comparator);
+        this(null, null, null, comparator);
     }
 
-    public InMemoryBoundedCache(Integer maximumSize, Duration expireAfterWrite) {
+    public InMemoryBoundedCache(
+        Integer maximumSize,
+        Duration expireAfterWrite,
+        CacheLoader<K, V> loader
+    ) {
         super();
+        this.loader = loader;
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    public InMemoryBoundedCache(Integer maximumSize, Duration expireAfterWrite,
-        Comparator<? super K> comparator) {
+    public InMemoryBoundedCache(
+        Integer maximumSize,
+        Duration expireAfterWrite,
+        CacheLoader<K, V> loader,
+        Comparator<? super K> comparator
+    ) {
         super(comparator);
+        this.loader = loader;
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
     @SuppressWarnings("unchecked")
     private com.google.common.cache.Cache<K, V> createCache(
-        Integer maximumSize, Duration expireAfterWrite) {
-        CacheBuilder<?, ?> cacheBuilder = CacheBuilder.newBuilder();
+        Integer maximumSize, Duration expireAfterWrite
+    ) {
+        CacheBuilder<K, V> cacheBuilder = CacheBuilder.newBuilder()
+            .removalListener(new RemovalListener<K, V>() {
+                @Override
+                public void onRemoval(RemovalNotification<K, V> entry) {
+                    delegate().remove(entry.getKey(), entry.getValue());
+                }
+            });
         if (maximumSize != null && maximumSize >= 0) {
             cacheBuilder = cacheBuilder.maximumSize(maximumSize);
         }
         if (expireAfterWrite != null && !expireAfterWrite.isNegative()) {
             cacheBuilder = cacheBuilder.expireAfterWrite(expireAfterWrite);
         }
-        return (com.google.common.cache.Cache<K, V>) cacheBuilder.build();
+        if (loader != null) {
+            return cacheBuilder.build(
+                new com.google.common.cache.CacheLoader<K, V>() {
+                    @Override
+                    public V load(K key) throws Exception {
+                        V value = loader.load(key);
+                        if (value != null) {
+                            delegate().put(key, value);
+                        }
+                        return value;
+                    }
+                }
+            );
+        } else {
+            return cacheBuilder.build();
+        }
+    }
+
+    @Override
+    public boolean containsKey(final Object key) {
+        return get(key) != null;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public V get(final Object key) {
+        if (loader != null) {
+            try {
+                return ((LoadingCache<K, V>) cache).getUnchecked((K) key);
+            } catch (InvalidCacheLoadException e) {
+                return null;
+            }
+        } else {
+            return super.get(key);
+        }
     }
 
     @Override

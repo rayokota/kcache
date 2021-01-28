@@ -140,7 +140,7 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
         }
     }
 
-    protected Cache<String, String> createKafkaCacheInstance() {
+    private Cache<String, String> createKafkaCacheInstance() {
         Properties props = getKafkaCacheProperties();
         KafkaCacheConfig config = new KafkaCacheConfig(props);
         Cache<String, String> kafkaCache = Caches.concurrentCache(

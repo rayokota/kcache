@@ -83,15 +83,12 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
         }
         if (loader != null) {
             return caffeine.build(
-                new com.github.benmanes.caffeine.cache.CacheLoader<K, V>() {
-                    @Override
-                    public V load(K key) throws Exception {
-                        V value = loader.load(key);
-                        if (value != null) {
-                            delegate().put(key, value);
-                        }
-                        return value;
+                key -> {
+                    V value = loader.load(key);
+                    if (value != null) {
+                        delegate().put(key, value);
                     }
+                    return value;
                 }
             );
         } else {

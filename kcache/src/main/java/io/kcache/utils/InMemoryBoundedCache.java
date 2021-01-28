@@ -64,12 +64,7 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
         Integer maximumSize, Duration expireAfterWrite
     ) {
         CacheBuilder<K, V> cacheBuilder = CacheBuilder.newBuilder()
-            .removalListener(new RemovalListener<K, V>() {
-                @Override
-                public void onRemoval(RemovalNotification<K, V> entry) {
-                    delegate().remove(entry.getKey(), entry.getValue());
-                }
-            });
+            .removalListener(entry -> delegate().remove(entry.getKey(), entry.getValue()));
         if (maximumSize != null && maximumSize >= 0) {
             cacheBuilder = cacheBuilder.maximumSize(maximumSize);
         }

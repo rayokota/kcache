@@ -815,7 +815,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     producer.send(producerRecord);
                                     log.warn("Rollback invalid update to key {}", messageKey);
                                 } catch (KafkaException ke) {
-                                    log.error("Failed to recover from invalid update to key {}",
+                                    log.error("Failed to rollback invalid update to key {}",
                                         messageKey, ke);
                                 }
                                 break;

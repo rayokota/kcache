@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import io.kcache.CacheUpdateHandler.ValidationStatus;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
@@ -785,30 +786,42 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
                         long offset = record.offset();
                         long timestamp = record.timestamp();
-                        if (cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp)) {
-                            log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
-                            V oldMessage;
-                            if (message == null) {
-                                oldMessage = localCache.remove(messageKey);
-                            } else {
-                                oldMessage = localCache.put(messageKey, message);
-                            }
-                            cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
-                        } else if (!readOnly) {
-                            V oldMessage = localCache.get(messageKey);
-                            try {
-                                ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                                    topic,
-                                    record.key(),
-                                    oldMessage == null ? null : valueSerde.serializer().serialize(topic, oldMessage)
-                                );
-                                producer.send(producerRecord);
+                        ValidationStatus status =
+                            cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp);
+                        V oldMessage;
+                        switch (status) {
+                            case SUCCESS:
+                                log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
+                                if (message == null) {
+                                    oldMessage = localCache.remove(messageKey);
+                                } else {
+                                    oldMessage = localCache.put(messageKey, message);
+                                }
+                                cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
+                                break;
+                            case ROLLBACK_FAILURE:
+                                if (readOnly) {
+                                    log.warn("Ignore invalid update to key {}", messageKey);
+                                    break;
+                                }
+                                oldMessage = localCache.get(messageKey);
+                                try {
+                                    ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                                        topic,
+                                        record.key(),
+                                        oldMessage == null ? null
+                                            : valueSerde.serializer().serialize(topic, oldMessage)
+                                    );
+                                    producer.send(producerRecord);
+                                    log.warn("Rollback invalid update to key {}", messageKey);
+                                } catch (KafkaException ke) {
+                                    log.error("Failed to recover from invalid update to key {}",
+                                        messageKey, ke);
+                                }
+                                break;
+                            case IGNORE_FAILURE:
                                 log.warn("Ignore invalid update to key {}", messageKey);
-                            } catch (KafkaException ke) {
-                                log.error("Failed to recover from invalid update to key {}", messageKey, ke);
-                            }
-                        } else {
-                            log.warn("Ignore invalid update to key {}", messageKey);
+                                break;
                         }
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic "

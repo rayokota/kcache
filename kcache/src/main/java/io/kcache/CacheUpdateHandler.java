@@ -23,6 +23,12 @@ import java.io.IOException;
 
 public interface CacheUpdateHandler<K, V> extends Closeable {
 
+    enum ValidationStatus {
+        SUCCESS,
+        ROLLBACK_FAILURE,
+        IGNORE_FAILURE
+    }
+
     /**
      * Invoked after the cache is initialized.
      */
@@ -39,8 +45,8 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param timestamp timestamp
      * @return whether the update should proceed
      */
-    default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
-        return true;
+    default ValidationStatus validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
+        return ValidationStatus.SUCCESS;
     }
 
     /**

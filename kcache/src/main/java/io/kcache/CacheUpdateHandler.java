@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
@@ -65,8 +66,10 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * Invoked after a batch of updates.
      *
      * @param count batch count
+     * @return the offsets to checkpoint, or null
      */
-    default void checkpoint(int count) {
+    default Map<TopicPartition, Long> checkpoint(int count) {
+        return null;
     }
 
     @Override

@@ -831,12 +831,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                count = records.count();
-                cacheUpdateHandler.checkpoint(count);
                 if (localCache.isPersistent() && initialized.get()) {
                     try {
                         localCache.flush();
-                        checkpointOffsets();
+                        Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(records.count());
+                        checkpointOffsets(offsets);
                     } catch (CacheException e) {
                         log.warn("Failed to flush", e);
                     }
@@ -864,11 +863,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void checkpointOffsets() {
-            Map<TopicPartition, Long> offsets = offsetsInTopic.entrySet()
-                .stream()
-                .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
-            checkpointFileCache.putAll(offsets);
+        private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
+            Map<TopicPartition, Long> newOffsets = offsets != null
+                ? offsets
+                : offsetsInTopic.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
+            checkpointFileCache.putAll(newOffsets);
             try {
                 checkpointFile.write(checkpointFileCache);
             } catch (final IOException e) {

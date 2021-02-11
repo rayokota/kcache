@@ -24,6 +24,9 @@ import io.kcache.exceptions.CacheInitializationException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
@@ -46,9 +49,13 @@ import java.util.stream.Collectors;
 public abstract class PersistentCache<K, V> implements Cache<K, V> {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
 
+    public static final String MOVEME_FILE_NAME = "moveme";
+
     private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
 
     private final String name;
+    private final String parentDir;
+    private final String rootDir;
     private final File dbDir;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -63,6 +70,8 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
                            Serde<V> valueSerde,
                            Comparator<K> comparator) {
         this.name = name;
+        this.parentDir = parentDir;
+        this.rootDir = rootDir;
         this.dbDir = new File(new File(rootDir, parentDir), name);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -100,6 +109,12 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
     @Override
     public synchronized void init() {
         try {
+            File moveme = new File(rootDir, MOVEME_FILE_NAME);
+            if (moveme.exists()) {
+                Files.move(Paths.get(rootDir), Paths.get(rootDir + ".bak"),
+                    StandardCopyOption.REPLACE_EXISTING);
+                Files.delete(Paths.get(rootDir + ".bak", MOVEME_FILE_NAME));
+            }
             Files.createDirectories(dbDir.getParentFile().toPath());
             Files.createDirectories(dbDir.getAbsoluteFile().toPath());
         } catch (final IOException fatal) {

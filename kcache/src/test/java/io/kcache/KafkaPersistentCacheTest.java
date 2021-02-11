@@ -20,7 +20,11 @@ import static org.junit.Assert.assertEquals;
 
 import io.kcache.exceptions.CacheException;
 import io.kcache.utils.OffsetCheckpoint;
+import io.kcache.utils.PersistentCache;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
@@ -99,8 +103,54 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
         assertEquals(result, offsets);
     }
 
+    @Test
+    public void testMovedCheckpointBeforeAndAfterRestart() throws Exception {
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
+        String key = "Kafka";
+        String value = "Rocks";
+        String key2 = "Hello";
+        String value2 = "World";
+        try {
+            try {
+                kafkaCache.put(key, value);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+            }
+            String retrievedValue;
+            try {
+                retrievedValue = kafkaCache.get(key);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+            kafkaCache.close();
+
+            // add moveme file
+            File moveme = new File(dir.getRoot().toString(), PersistentCache.MOVEME_FILE_NAME);
+            moveme.createNewFile();
+
+            // recreate kafka store
+            kafkaCache = createAndInitKafkaCacheInstance();
+            try {
+                kafkaCache.put(key2, value2);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store put(Hello, World) operation failed", e);
+            }
+        } finally {
+            kafkaCache.close();
+        }
+
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(new TopicPartition(topic, 0), 1L);
+        final Map<TopicPartition, Long> result = readOffsetsCheckpoint(dir.getRoot().toString() + ".bak");
+        assertEquals(result, offsets);
+    }
+
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
-        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(dir.getRoot().toString(), 0, topic)) {
+        return readOffsetsCheckpoint(dir.getRoot().toString());
+    }
+
+    private Map<TopicPartition, Long> readOffsetsCheckpoint(String dir) throws IOException {
+        try (OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(dir, 0, topic)) {
             return offsetCheckpoint.read();
         }
     }

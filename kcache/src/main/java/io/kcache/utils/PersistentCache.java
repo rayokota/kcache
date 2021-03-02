@@ -111,9 +111,18 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         try {
             File moveme = new File(rootDir, MOVEME_FILE_NAME);
             if (moveme.exists()) {
-                Files.move(Paths.get(rootDir), Paths.get(rootDir + ".bak"),
-                    StandardCopyOption.REPLACE_EXISTING);
-                Files.delete(Paths.get(rootDir + ".bak", MOVEME_FILE_NAME));
+                File backupDir = new File(rootDir + ".bak");
+                if (backupDir.exists()) {
+                    if (!deleteDirectory(backupDir)) {
+                        log.error("Could not delete backup dir: {}", backupDir);
+                    } else {
+                        Files.move(Paths.get(rootDir), backupDir.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } else {
+                    Files.move(Paths.get(rootDir), backupDir.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+                }
             }
             Files.createDirectories(dbDir.getParentFile().toPath());
             Files.createDirectories(dbDir.getAbsoluteFile().toPath());
@@ -124,6 +133,16 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         // open the DB dir
         openDB();
         open = true;
+    }
+
+    private static boolean deleteDirectory(File directoryToBeDeleted) {
+        File[] allContents = directoryToBeDeleted.listFiles();
+        if (allContents != null) {
+            for (File file : allContents) {
+                deleteDirectory(file);
+            }
+        }
+        return directoryToBeDeleted.delete();
     }
 
     protected abstract void openDB();

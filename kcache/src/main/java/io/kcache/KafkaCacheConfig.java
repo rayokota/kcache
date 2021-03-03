@@ -17,6 +17,8 @@
 package io.kcache;
 
 import io.kcache.utils.EnumRecommender;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -47,7 +49,7 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.group.id</code>
      */
     public static final String KAFKACACHE_GROUP_ID_CONFIG = "kafkacache.group.id";
-    public static final String DEFAULT_KAFKACACHE_GROUP_ID = "kafkacache";
+    public static final String DEFAULT_KAFKACACHE_GROUP_ID_PREFIX = "kafka-cache";
     /**
      * <code>kafkacache.client.id</code>
      */
@@ -155,7 +157,8 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_BOOTSTRAP_SERVERS_DOC =
         "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`.";
     protected static final String KAFKACACHE_GROUP_ID_DOC =
-        "Use this setting to override the group.id for the Kafka cache consumer.";
+        "Use this setting to override the group.id for the Kafka cache consumer. "
+            + "The default is \"kafka-cache-<host>\"";
     protected static final String KAFKACACHE_CLIENT_ID_DOC =
         "Use this setting to override the client.id for the Kafka cache consumer.";
     protected static final String KAFKACACHE_TOPIC_DOC =
@@ -291,7 +294,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_DATA_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_DATA_DIR_DOC
             )
-            .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
+            .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING,
+                DEFAULT_KAFKACACHE_GROUP_ID_PREFIX + "-" + getDefaultHost(),
                 ConfigDef.Importance.LOW, KAFKACACHE_GROUP_ID_DOC
             )
             .define(KAFKACACHE_CLIENT_ID_CONFIG, ConfigDef.Type.STRING, null,
@@ -443,5 +447,13 @@ public class KafkaCacheConfig extends AbstractConfig {
             throw new ConfigException("Couldn't load properties from " + propsFile, e);
         }
         return props;
+    }
+
+    private static String getDefaultHost() {
+        try {
+            return InetAddress.getLocalHost().getCanonicalHostName();
+        } catch (UnknownHostException e) {
+            throw new ConfigException("Unknown local hostname", e);
+        }
     }
 }

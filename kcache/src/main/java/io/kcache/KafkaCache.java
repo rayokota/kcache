@@ -361,12 +361,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
-        topicRequest.configs(
-            Collections.singletonMap(
-                TopicConfig.CLEANUP_POLICY_CONFIG,
-                TopicConfig.CLEANUP_POLICY_COMPACT
-            )
+        Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkastore.topic.config."));
+        topicConfigs.put(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT
         );
+        topicRequest.configs(topicConfigs);
         try {
             admin.createTopics(Collections.singleton(topicRequest)).all()
                 .get(initTimeout, TimeUnit.MILLISECONDS);

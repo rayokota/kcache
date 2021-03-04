@@ -19,7 +19,14 @@ package io.kcache;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.common.config.ConfigResource;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class KafkaCacheTest extends ClusterTestHarness {
@@ -184,6 +192,33 @@ public class KafkaCacheTest extends ClusterTestHarness {
         } finally {
             kafkaCache.close();
         }
+    }
+
+    @Test
+    public void testTopicAdditionalConfigs() throws Exception {
+        Properties kafkaCacheProps = getKafkaCacheProperties();
+        kafkaCacheProps.put("kafkastore.topic.config.delete.retention.ms", "10000");
+        kafkaCacheProps.put("kafkastore.topic.config.segment.ms", "10000");
+        CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps);
+
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+
+        ConfigResource configResource = new ConfigResource(
+            ConfigResource.Type.TOPIC,
+            KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC
+        );
+        Map<ConfigResource, Config> topicConfigs;
+        try (AdminClient admin = AdminClient.create(props)) {
+            topicConfigs = admin.describeConfigs(Collections.singleton(configResource))
+                .all().get(60, TimeUnit.SECONDS);
+        }
+
+        Config config = topicConfigs.get(configResource);
+        assertNotNull(config.get("delete.retention.ms"));
+        assertEquals("10000",config.get("delete.retention.ms").value());
+        assertNotNull(config.get("segment.ms"));
+        assertEquals("10000",config.get("segment.ms").value());
     }
 
     protected Cache<String, String> createAndInitKafkaCacheInstance() {

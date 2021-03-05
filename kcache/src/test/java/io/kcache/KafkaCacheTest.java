@@ -199,26 +199,26 @@ public class KafkaCacheTest extends ClusterTestHarness {
         Properties kafkaCacheProps = getKafkaCacheProperties();
         kafkaCacheProps.put("kafkastore.topic.config.delete.retention.ms", "10000");
         kafkaCacheProps.put("kafkastore.topic.config.segment.ms", "10000");
-        CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps);
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+            Properties props = new Properties();
+            props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-        Properties props = new Properties();
-        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            ConfigResource configResource = new ConfigResource(
+                ConfigResource.Type.TOPIC,
+                KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC
+            );
+            Map<ConfigResource, Config> topicConfigs;
+            try (AdminClient admin = AdminClient.create(props)) {
+                topicConfigs = admin.describeConfigs(Collections.singleton(configResource))
+                    .all().get(60, TimeUnit.SECONDS);
+            }
 
-        ConfigResource configResource = new ConfigResource(
-            ConfigResource.Type.TOPIC,
-            KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC
-        );
-        Map<ConfigResource, Config> topicConfigs;
-        try (AdminClient admin = AdminClient.create(props)) {
-            topicConfigs = admin.describeConfigs(Collections.singleton(configResource))
-                .all().get(60, TimeUnit.SECONDS);
+            Config config = topicConfigs.get(configResource);
+            assertNotNull(config.get("delete.retention.ms"));
+            assertEquals("10000", config.get("delete.retention.ms").value());
+            assertNotNull(config.get("segment.ms"));
+            assertEquals("10000", config.get("segment.ms").value());
         }
-
-        Config config = topicConfigs.get(configResource);
-        assertNotNull(config.get("delete.retention.ms"));
-        assertEquals("10000",config.get("delete.retention.ms").value());
-        assertNotNull(config.get("segment.ms"));
-        assertEquals("10000",config.get("segment.ms").value());
     }
 
     protected Cache<String, String> createAndInitKafkaCacheInstance() {

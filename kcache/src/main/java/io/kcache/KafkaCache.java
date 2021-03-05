@@ -96,6 +96,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private int initTimeout;
     private int timeout;
     private String checkpointDir;
+    private int checkpointVersion;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
     private Consumer<byte[], byte[]> consumer;
@@ -157,6 +158,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
+        this.checkpointVersion = config.getInt(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_VERSION_CONFIG);
         this.cacheUpdateHandler =
             cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
@@ -240,7 +242,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         if (localCache.isPersistent()) {
             try {
-                checkpointFile = new OffsetCheckpoint(checkpointDir, 0, topic);
+                checkpointFile = new OffsetCheckpoint(checkpointDir, checkpointVersion, topic);
                 checkpointFileCache.putAll(checkpointFile.read());
             } catch (IOException e) {
                 throw new CacheInitializationException("Failed to read checkpoints", e);

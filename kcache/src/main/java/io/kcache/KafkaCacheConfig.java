@@ -106,6 +106,10 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
     /**
+     * <code>kafkacache.checkpoint.version</code>
+     */
+    public static final String KAFKACACHE_CHECKPOINT_VERSION_CONFIG = "kafkacache.checkpoint.version";
+    /**
      * <code>kafkacache.data.dir</code>
      */
     public static final String KAFKACACHE_DATA_DIR_CONFIG = "kafkacache.data.dir";
@@ -187,6 +191,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "For an in-memory cache, the expiration in seconds for entries added to the cache.";
     protected static final String KAFKACACHE_CHECKPOINT_DIR_DOC =
         "For persistent backing caches, the directory in which to store offset checkpoints.";
+    protected static final String KAFKACACHE_CHECKPOINT_VERSION_DOC =
+        "For persistent backing caches, the version of the checkpoint offset file.";
     protected static final String KAFKACACHE_DATA_DIR_DOC =
         "For persistent backing caches, the directory in which to store data.";
 
@@ -290,6 +296,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_DIR_DOC
+            )
+            .define(KAFKACACHE_CHECKPOINT_VERSION_CONFIG, ConfigDef.Type.INT, 0,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_VERSION_DOC
             )
             .define(KAFKACACHE_DATA_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_DATA_DIR_DOC

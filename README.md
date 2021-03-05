@@ -1,11 +1,11 @@
 # KCache - An In-Memory Cache Backed by Apache Kafka
 
-[![Build Status][travis-shield]][travis-link]
+[![Build Status][github-actions-shield]][github-actions-link]
 [![Maven][maven-shield]][maven-link]
 [![Javadoc][javadoc-shield]][javadoc-link]
 
-[travis-shield]: https://travis-ci.org/rayokota/kcache.svg?branch=master
-[travis-link]: https://travis-ci.org/rayokota/kcache
+[github-actions-shield]: https://github.com/rayokota/kcache/workflows/build/badge.svg
+[github-actions-link]: https://github.com/rayokota/kcache/actions
 [maven-shield]: https://img.shields.io/maven-central/v/io.kcache/kcache.svg
 [maven-link]: https://search.maven.org/#search%7Cga%7C1%7Cio.kcache
 [javadoc-shield]: https://javadoc.io/badge/io.kcache/kcache.svg?color=blue

@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 public class LmdbCacheTest extends PersistentCacheTest {
 
     @Override
-    protected Cache<Bytes, byte[]> getCache() {
+    protected Cache<Bytes, byte[]> createCache() {
         return new LmdbCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
     }
 }

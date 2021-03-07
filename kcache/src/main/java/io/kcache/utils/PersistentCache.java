@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
 /**
  * A persistent key-value store.
  */
-public abstract class PersistentCache<K, V> implements Cache<K, V> {
+public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
 
     public static final String MOVEME_FILE_NAME = "moveme";
@@ -87,6 +88,14 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
 
     public String name() {
         return name;
+    }
+
+    public String parentDir() {
+        return parentDir;
+    }
+
+    public String rootDir() {
+        return rootDir;
     }
 
     public File dbDir() {

@@ -16,4 +16,7 @@
     <Match>
         <Class name="~io.kcache.benchmark.jmh_generated.*"/>
     </Match>
+    <Match>
+        <Class name="~io.kcache.rdbms.jooq.*"/>
+    </Match>
 </FindBugsFilter>

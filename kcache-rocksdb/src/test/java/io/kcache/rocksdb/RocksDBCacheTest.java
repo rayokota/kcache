@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 public class RocksDBCacheTest extends PersistentCacheTest {
 
     @Override
-    protected Cache<Bytes, byte[]> getCache() {
+    protected Cache<Bytes, byte[]> createCache() {
         return new RocksDBCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
     }
 }

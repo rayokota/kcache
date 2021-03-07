@@ -24,7 +24,7 @@ import java.util.Properties;
 public class KafkaLmdbCacheTest extends KafkaPersistentCacheTest {
 
     @Override
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.LMDB.name().toLowerCase());
         return props;

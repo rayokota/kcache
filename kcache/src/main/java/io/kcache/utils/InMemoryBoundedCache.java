@@ -19,8 +19,6 @@ package io.kcache.utils;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader.InvalidCacheLoadException;
 import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
 import io.kcache.CacheLoader;
 import java.time.Duration;
 import java.util.Comparator;

@@ -53,7 +53,7 @@ public abstract class KafkaPersistentCacheTest extends KafkaCacheTest {
     }
 
     @Override
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG, dir.getRoot().toString());

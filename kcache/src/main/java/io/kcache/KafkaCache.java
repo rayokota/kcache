@@ -22,9 +22,11 @@ import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
+import io.kcache.utils.PersistentCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
+import java.util.Locale;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -201,6 +203,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     clsName = "io.kcache.mapdb.MapDBCache";
                     isPersistent = true;
                     break;
+                case RDBMS:
+                    clsName = "io.kcache.rdbms.RdbmsCache";
+                    isPersistent = true;
+                    break;
                 case ROCKSDB:
                     clsName = "io.kcache.rocksdb.RocksDBCache";
                     isPersistent = true;
@@ -208,16 +214,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class
                 .forName(clsName);
+            Cache<K, V> cache;
             if (isPersistent) {
                 String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
                 Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
                     String.class, String.class, Serde.class, Serde.class, Comparator.class);
-                return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
+                cache = ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
             } else {
                 Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
                     Integer.class, Duration.class, CacheLoader.class, Comparator.class);
-                return ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
+                cache = ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
             }
+            Map<String, ?> configs = config.originalsWithPrefix(
+                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
+                    + cacheType.name().toLowerCase(Locale.ROOT) + ".");
+            cache.configure(configs);
+            return cache;
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);
         }

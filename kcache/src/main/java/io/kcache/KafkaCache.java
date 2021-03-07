@@ -26,6 +26,7 @@ import io.kcache.utils.PersistentCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
+import java.util.Locale;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -225,7 +226,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 cache = ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
             }
             Map<String, ?> configs = config.originalsWithPrefix(
-                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "." + cacheType + ".");
+                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
+                    + cacheType.name().toLowerCase(Locale.ROOT) + ".");
             cache.configure(configs);
             return cache;
         } catch (Exception e) {

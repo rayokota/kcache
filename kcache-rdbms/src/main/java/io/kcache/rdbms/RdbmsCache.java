@@ -174,9 +174,10 @@ public class RdbmsCache<K, V> extends PersistentCache<K, V> {
     @Override
     public int size() {
         validateStoreOpen();
-        return dsl().selectCount()
+        Integer size = dsl().selectCount()
             .from(KV)
             .fetchOne(0, int.class);
+        return size != null ? size : 0;
     }
 
     @Override
@@ -284,7 +285,9 @@ public class RdbmsCache<K, V> extends PersistentCache<K, V> {
             @Override
             public KeyValue<byte[], byte[]> next() {
                 KvRecord record = cursor.fetchNext();
-                return new KeyValue<>(record.getKvKey(), record.getKvValue());
+                return record != null
+                    ? new KeyValue<>(record.getKvKey(), record.getKvValue())
+                    : null;
             }
 
             @Override

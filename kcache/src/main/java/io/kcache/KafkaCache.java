@@ -222,7 +222,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } else {
                 Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
                     Integer.class, Duration.class, CacheLoader.class, Comparator.class);
-                return ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
+                cache = ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
             }
             Map<String, ?> configs = config.originalsWithPrefix(
                 KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "." + cacheType + ".");

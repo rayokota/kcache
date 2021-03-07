@@ -20,9 +20,11 @@ import io.kcache.exceptions.CacheInitializationException;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Map;
 import java.util.SortedMap;
+import org.apache.kafka.common.Configurable;
 
-public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
+public interface Cache<K, V> extends SortedMap<K, V>, Configurable, Closeable {
 
     /**
      * Whether the cache is persistent.
@@ -31,6 +33,12 @@ public interface Cache<K, V> extends SortedMap<K, V>, Closeable {
      */
     default boolean isPersistent() {
         return false;
+    }
+
+    /**
+     * Configures the cache.
+     */
+    default void configure(Map<String, ?> configs) {
     }
 
     /**

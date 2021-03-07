@@ -44,11 +44,15 @@ public abstract class PersistentCacheTest {
 
     Cache<Bytes, byte[]> cache;
 
-    protected abstract Cache<Bytes, byte[]> getCache();
+    protected abstract Cache<Bytes, byte[]> createCache();
 
     @Before
     public void setUp() {
-        cache = getCache();
+        cache = createCache();
+    }
+
+    public Cache<Bytes, byte[]> getCache() {
+        return cache;
     }
 
     @After

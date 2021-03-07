@@ -184,7 +184,7 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_TIMEOUT_DOC =
         "The timeout for an operation on the Kafka cache.";
     protected static final String KAFKACACHE_BACKING_CACHE_DOC =
-        "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, and `rocksdb`.";
+        "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, `rdbms`, and `rocksdb`.";
     protected static final String KAFKACACHE_BOUNDED_CACHE_SIZE_DOC =
         "For an in-memory cache, the maximum size of the cache.";
     protected static final String KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_DOC =

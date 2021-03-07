@@ -37,10 +37,10 @@ public class RdbmsCacheTest extends PersistentCacheTest {
         //configs.put(RdbmsCache.DIALECT_CONFIG, "MYSQL");
         //configs.put(RdbmsCache.USERNAME_CONFIG, "root");
 
-        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:postgresql:postgres");
-        configs.put(RdbmsCache.DIALECT_CONFIG, "POSTGRES");
-        configs.put(RdbmsCache.USERNAME_CONFIG, "postgres");
-        configs.put(RdbmsCache.PASSWORD_CONFIG, "postgres");
+        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:postgresql:postgres");
+        //configs.put(RdbmsCache.DIALECT_CONFIG, "POSTGRES");
+        //configs.put(RdbmsCache.USERNAME_CONFIG, "postgres");
+        //configs.put(RdbmsCache.PASSWORD_CONFIG, "postgres");
 
         //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "H2");
@@ -48,8 +48,8 @@ public class RdbmsCacheTest extends PersistentCacheTest {
         //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "HSQLDB");
 
-        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.newFolder().getAbsolutePath() + "/kcache;create=true");
-        //configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
+        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.newFolder().getAbsolutePath() + "/kcache;create=true");
+        configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
 
         cache.configure(configs);
         return cache;

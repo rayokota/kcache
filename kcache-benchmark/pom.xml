@@ -69,6 +69,11 @@
         </dependency>
         <dependency>
             <groupId>io.kcache</groupId>
+            <artifactId>kcache-rdbms</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.kcache</groupId>
             <artifactId>kcache-rocksdb</artifactId>
             <version>${project.version}</version>
         </dependency>

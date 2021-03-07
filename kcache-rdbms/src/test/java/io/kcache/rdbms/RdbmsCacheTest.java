@@ -49,9 +49,4 @@ public class RdbmsCacheTest extends PersistentCacheTest {
         cache.configure(configs);
         return cache;
     }
-
-    @After
-    public void clearCache() {
-        getCache().clear();
-    }
 }

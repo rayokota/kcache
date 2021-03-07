@@ -313,12 +313,6 @@ public class RdbmsCache<K, V> extends PersistentCache<K, V> {
     }
 
     @Override
-    public void clear() {
-        // For testing
-        dsl().deleteFrom(KV).execute();
-    }
-
-    @Override
     protected void closeDB() {
     }
 }

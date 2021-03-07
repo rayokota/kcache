@@ -33,6 +33,7 @@ import io.kcache.KeyValueIterator;
 import io.kcache.bdbje.BdbJECache;
 import io.kcache.lmdb.LmdbCache;
 import io.kcache.mapdb.MapDBCache;
+import io.kcache.rdbms.RdbmsCache;
 import io.kcache.rocksdb.RocksDBCache;
 import io.kcache.utils.PersistentCache;
 import java.io.File;
@@ -104,7 +105,7 @@ public class PersistentCacheBenchmark {
     @SuppressWarnings("checkstyle:visibilitymodifier")
     public static class CommonKafkaCache extends Common {
 
-        @Param({"bdbje", "lmdb", "mapdb", "rocksdb"})
+        @Param({"bdbje", "lmdb", "mapdb", "rdbms", "rocksdb"})
         String cacheType;
 
         PersistentCache<byte[], byte[]> cache;
@@ -170,6 +171,8 @@ public class PersistentCacheBenchmark {
                     return new LmdbCache<>(name, dataDir, serde, serde, null);
                 case MAPDB:
                     return new MapDBCache<>(name, dataDir, serde, serde, null);
+                case RDBMS:
+                    return new RdbmsCache<>(name, dataDir, serde, serde, null);
                 case ROCKSDB:
                     return new RocksDBCache<>(name, dataDir, serde, serde, null);
                 default:

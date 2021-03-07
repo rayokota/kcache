@@ -49,7 +49,7 @@ public class KafkaCaffeineCacheTest extends KafkaCacheTest {
         }
     }
 
-    private Cache<String, String> createAndInitKafkaCacheInstanceWithLoader() {
+    private Cache<String, String> createAndInitKafkaCacheInstanceWithLoader() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         KafkaCacheConfig config = new KafkaCacheConfig(props);
         Map<String, String> map = new ConcurrentHashMap<>();
@@ -93,7 +93,7 @@ public class KafkaCaffeineCacheTest extends KafkaCacheTest {
     }
 
     @Override
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.CAFFEINE.name().toLowerCase());
         props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, 1);

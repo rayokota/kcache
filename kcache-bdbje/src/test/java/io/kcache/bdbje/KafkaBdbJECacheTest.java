@@ -24,7 +24,7 @@ import java.util.Properties;
 public class KafkaBdbJECacheTest extends KafkaPersistentCacheTest {
 
     @Override
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.BDBJE.name().toLowerCase());
         return props;

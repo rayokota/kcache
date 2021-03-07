@@ -86,7 +86,7 @@ public class Kv extends TableImpl<KvRecord> {
      * Create a <code>kcache.KV</code> table reference
      */
     public Kv() {
-        this(DSL.name("KV"), null);
+        this(DSL.name("kv"), null);
     }
 
     public <O extends Record> Kv(Table<O> child, ForeignKey<O, KvRecord> key) {

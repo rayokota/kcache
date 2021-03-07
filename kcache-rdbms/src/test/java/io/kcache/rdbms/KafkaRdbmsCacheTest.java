@@ -24,7 +24,7 @@ import java.util.Properties;
 public class KafkaRdbmsCacheTest extends KafkaPersistentCacheTest {
 
     @Override
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.RDBMS.name().toLowerCase());
         String prefix = KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
@@ -34,13 +34,13 @@ public class KafkaRdbmsCacheTest extends KafkaPersistentCacheTest {
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "MYSQL");
         //props.put(prefix + RdbmsCache.USERNAME_CONFIG, "root");
 
-        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.toString());
+        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "H2");
 
-        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.toString());
+        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "HSQLDB");
 
-        props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.toString() + ";create=true");
+        props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.newFolder().getAbsolutePath() + "/kcache;create=true");
         props.put(prefix + RdbmsCache.DIALECT_CONFIG, "DERBY");
 
         return props;

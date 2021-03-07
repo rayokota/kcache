@@ -56,7 +56,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testInitialization() throws IOException {
+    public void testInitialization() throws Exception {
         Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
         kafkaCache.close();
     }
@@ -81,7 +81,8 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleGetAfterFailure() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
+        Properties props = getKafkaCacheProperties();
+        Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
         String key = "Kafka";
         String value = "Rocks";
         String retrievedValue;
@@ -101,8 +102,8 @@ public class KafkaCacheTest extends ClusterTestHarness {
             kafkaCache.close();
         }
 
-        // recreate kafka store
-        kafkaCache = createAndInitKafkaCacheInstance();
+        // recreate kafka store with same props
+        kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
         try {
             try {
                 retrievedValue = kafkaCache.get(key);
@@ -221,12 +222,12 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
     }
 
-    protected Cache<String, String> createAndInitKafkaCacheInstance() {
+    protected Cache<String, String> createAndInitKafkaCacheInstance() throws Exception {
         Properties props = getKafkaCacheProperties();
         return CacheUtils.createAndInitKafkaCacheInstance(props);
     }
 
-    protected Properties getKafkaCacheProperties() {
+    protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());

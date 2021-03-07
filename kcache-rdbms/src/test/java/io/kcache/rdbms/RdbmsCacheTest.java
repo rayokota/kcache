@@ -18,6 +18,7 @@ package io.kcache.rdbms;
 
 import io.kcache.Cache;
 import io.kcache.PersistentCacheTest;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serdes;
@@ -27,7 +28,7 @@ import org.junit.After;
 public class RdbmsCacheTest extends PersistentCacheTest {
 
     @Override
-    protected Cache<Bytes, byte[]> createCache() {
+    protected Cache<Bytes, byte[]> createCache() throws Exception {
         Cache<Bytes, byte[]> cache =
             new RdbmsCache<>(DB_NAME, dir.getRoot().toString(), Serdes.Bytes(), Serdes.ByteArray());
         Map<String, Object> configs = new HashMap<>();
@@ -36,13 +37,13 @@ public class RdbmsCacheTest extends PersistentCacheTest {
         //configs.put(RdbmsCache.DIALECT_CONFIG, "MYSQL");
         //configs.put(RdbmsCache.USERNAME_CONFIG, "root");
 
-        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.toString()");
+        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "H2");
 
-        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.toString()");
+        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.newFolder().getAbsolutePath() + "/kcache");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "HSQLDB");
 
-        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.toString() + ";create=true");
+        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.newFolder().getAbsolutePath() + "/kcache;create=true");
         configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
 
         cache.configure(configs);

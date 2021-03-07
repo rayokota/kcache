@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -44,10 +45,10 @@ public abstract class PersistentCacheTest {
 
     Cache<Bytes, byte[]> cache;
 
-    protected abstract Cache<Bytes, byte[]> createCache();
+    protected abstract Cache<Bytes, byte[]> createCache() throws Exception;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         cache = createCache();
     }
 

@@ -36,13 +36,13 @@ public class RdbmsCacheTest extends PersistentCacheTest {
         //configs.put(RdbmsCache.DIALECT_CONFIG, "MYSQL");
         //configs.put(RdbmsCache.USERNAME_CONFIG, "root");
 
-        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:/tmp/kcache");
+        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.toString()");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "H2");
 
-        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:/tmp/kcache");
+        //configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.toString()");
         //configs.put(RdbmsCache.DIALECT_CONFIG, "HSQLDB");
 
-        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:/tmp/kcache;create=true");
+        configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.toString() + ";create=true");
         configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
 
         cache.configure(configs);

@@ -34,13 +34,13 @@ public class KafkaRdbmsCacheTest extends KafkaPersistentCacheTest {
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "MYSQL");
         //props.put(prefix + RdbmsCache.USERNAME_CONFIG, "root");
 
-        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:/tmp/kcache");
+        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:h2:" + dir.toString());
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "H2");
 
-        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:/tmp/kcache");
+        //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:hsqldb:file:" + dir.toString());
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "HSQLDB");
 
-        props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:/tmp/kcache;create=true");
+        props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dir.toString() + ";create=true");
         props.put(prefix + RdbmsCache.DIALECT_CONFIG, "DERBY");
 
         return props;

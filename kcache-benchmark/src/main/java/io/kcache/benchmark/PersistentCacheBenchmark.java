@@ -38,6 +38,8 @@ import io.kcache.rocksdb.RocksDBCache;
 import io.kcache.utils.PersistentCache;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -172,7 +174,13 @@ public class PersistentCacheBenchmark {
                 case MAPDB:
                     return new MapDBCache<>(name, dataDir, serde, serde, null);
                 case RDBMS:
-                    return new RdbmsCache<>(name, dataDir, serde, serde, null);
+                    PersistentCache<byte[], byte[]> cache =
+                        new RdbmsCache<>(name, dataDir, serde, serde, null);
+                    Map<String, Object> configs = new HashMap<>();
+                    configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dataDir + "/kcache;create=true");
+                    configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
+                    cache.configure(configs);
+                    return cache;
                 case ROCKSDB:
                     return new RocksDBCache<>(name, dataDir, serde, serde, null);
                 default:

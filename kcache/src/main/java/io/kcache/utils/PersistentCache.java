@@ -24,7 +24,6 @@ import io.kcache.exceptions.CacheInitializationException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Objects;
@@ -50,6 +49,7 @@ import java.util.stream.Collectors;
 public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
 
+    public static final String DELETEME_FILE_NAME = "deleteme";
     public static final String MOVEME_FILE_NAME = "moveme";
 
     private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
@@ -118,21 +118,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
     @Override
     public synchronized void init() {
         try {
-            File moveme = new File(rootDir, MOVEME_FILE_NAME);
-            if (moveme.exists()) {
-                File backupDir = new File(rootDir + ".bak");
-                if (backupDir.exists()) {
-                    if (!deleteDirectory(backupDir)) {
-                        log.error("Could not delete backup dir: {}", backupDir);
-                    } else {
-                        Files.move(Paths.get(rootDir), backupDir.toPath(),
-                            StandardCopyOption.REPLACE_EXISTING);
-                    }
-                } else {
-                    Files.move(Paths.get(rootDir), backupDir.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
+            checkForDeleteOrMove();
             Files.createDirectories(dbDir.getParentFile().toPath());
             Files.createDirectories(dbDir.getAbsoluteFile().toPath());
         } catch (final IOException fatal) {
@@ -142,6 +128,30 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
         // open the DB dir
         openDB();
         open = true;
+    }
+
+    private void checkForDeleteOrMove() throws IOException {
+        File deleteme = new File(rootDir, DELETEME_FILE_NAME);
+        File moveme = new File(rootDir, MOVEME_FILE_NAME);
+        if (deleteme.exists()) {
+            File dir = new File(rootDir);
+            if (!deleteDirectory(dir)) {
+                log.error("Could not delete root dir: {}", dir);
+            }
+        } else if (moveme.exists()) {
+            File backupDir = new File(rootDir + ".bak");
+            if (backupDir.exists()) {
+                if (!deleteDirectory(backupDir)) {
+                    log.error("Could not delete backup dir: {}", backupDir);
+                } else {
+                    Files.move(Paths.get(rootDir), backupDir.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+                }
+            } else {
+                Files.move(Paths.get(rootDir), backupDir.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
     }
 
     private static boolean deleteDirectory(File directoryToBeDeleted) {

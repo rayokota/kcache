@@ -1,0 +1,20 @@
+version: 2
+updates:
+- package-ecosystem: maven
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: org.rocksdb:rocksdbjni
+    versions:
+    - 6.15.2
+    - 6.15.5
+    - 6.16.4
+  - dependency-name: com.github.spotbugs:spotbugs-maven-plugin
+    versions:
+    - 4.2.2
+  - dependency-name: com.github.ben-manes.caffeine:caffeine
+    versions:
+    - 2.9.0
+    - 3.0.0

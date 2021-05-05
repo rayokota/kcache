@@ -286,7 +286,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        this.cacheUpdateHandler.cacheInitialized(checkpointFileCache);
+        this.cacheUpdateHandler.cacheInitialized(new HashMap<>(checkpointFileCache));
     }
 
     @Override

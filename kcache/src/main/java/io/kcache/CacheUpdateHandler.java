@@ -32,8 +32,10 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
 
     /**
      * Invoked after the cache is initialized.
+     *
+     * @param checkpoints current checkpoints
      */
-    default void cacheInitialized() {
+    default void cacheInitialized(Map<TopicPartition, Long> checkpoints) {
     }
 
     /**

@@ -119,7 +119,7 @@ public interface Cache<K, V> extends SortedMap<K, V>, Configurable, Closeable {
     /**
      * Returns an iterator over all key-value pairs in this cache.
      *
-     * @return an <tt>KeyValueIterator</tt> over the elements in this collection
+     * @return a {@link KeyValueIterator} over the elements in this collection
      */
     KeyValueIterator<K, V> all();
 

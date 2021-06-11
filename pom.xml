@@ -47,7 +47,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
-        <bouncycastle.version>1.68</bouncycastle.version>
+        <bouncycastle.version>1.69</bouncycastle.version>
         <caffeine.version>2.8.8</caffeine.version>
         <guava.version>30.1.1-jre</guava.version>
         <hikari.version>4.0.3</hikari.version>
@@ -58,7 +58,7 @@
         <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.1</lmdb.version>
         <mapdb.version>3.0.8</mapdb.version>
-        <rocksdb.version>6.7.3</rocksdb.version>
+        <rocksdb.version>6.20.3</rocksdb.version>
         <scala.version>2.13.6</scala.version>
         <sl4j.version>1.7.30</sl4j.version>
     </properties>
@@ -315,7 +315,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.3.0</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
@@ -328,7 +328,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
+                        <version>3.0.1</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -362,7 +362,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.3.0</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>

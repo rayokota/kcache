@@ -60,7 +60,7 @@
         <mapdb.version>3.0.8</mapdb.version>
         <rocksdb.version>6.20.3</rocksdb.version>
         <scala.version>2.13.6</scala.version>
-        <sl4j.version>1.7.30</sl4j.version>
+        <sl4j.version>1.7.31</sl4j.version>
     </properties>
 
     <dependencyManagement>

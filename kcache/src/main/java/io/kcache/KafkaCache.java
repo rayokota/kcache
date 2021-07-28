@@ -778,6 +778,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                cacheUpdateHandler.startBatch(records.count());
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     try {
                         K messageKey;
@@ -854,6 +855,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         log.warn("Failed to flush", e);
                     }
                 }
+                cacheUpdateHandler.endBatch(records.count());
             } catch (WakeupException we) {
                 // do nothing
             } catch (RecordTooLargeException rtle) {

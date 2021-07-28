@@ -39,6 +39,13 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     }
 
     /**
+     * Invoked before a batch of updates.
+     * @param count batch count
+     */
+    default void startBatch(int count) {
+    }
+
+    /**
      * Invoked before every new K,V pair written to the cache
      *
      * @param key   key associated with the data
@@ -65,13 +72,21 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
     /**
-     * Invoked after a batch of updates.
+     * Retrieve the offsets to checkpoint.
      *
      * @param count batch count
      * @return the offsets to checkpoint, or null
      */
     default Map<TopicPartition, Long> checkpoint(int count) {
         return null;
+    }
+
+    /**
+     * Invoked after a batch of updates.
+     *
+     * @param count batch count
+     */
+    default void endBatch(int count) {
     }
 
     @Override

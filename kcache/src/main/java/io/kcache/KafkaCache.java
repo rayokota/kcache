@@ -27,6 +27,7 @@ import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
 import java.util.Locale;
+import java.util.Objects;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -820,18 +821,21 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     break;
                                 }
                                 oldMessage = localCache.get(messageKey);
-                                try {
-                                    ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                                        topic,
-                                        record.key(),
-                                        oldMessage == null ? null
-                                            : valueSerde.serializer().serialize(topic, oldMessage)
-                                    );
-                                    producer.send(producerRecord);
-                                    log.warn("Rollback invalid update to key {}", messageKey);
-                                } catch (KafkaException ke) {
-                                    log.error("Failed to rollback invalid update to key {}",
-                                        messageKey, ke);
+                                if (!Objects.equals(message, oldMessage)) {
+                                    try {
+                                        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                                            topic,
+                                            record.key(),
+                                            oldMessage == null ? null
+                                                : valueSerde.serializer()
+                                                    .serialize(topic, oldMessage)
+                                        );
+                                        producer.send(producerRecord);
+                                        log.warn("Rollback invalid update to key {}", messageKey);
+                                    } catch (KafkaException ke) {
+                                        log.error("Failed to rollback invalid update to key {}",
+                                            messageKey, ke);
+                                    }
                                 }
                                 break;
                             case IGNORE_FAILURE:

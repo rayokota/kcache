@@ -53,6 +53,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -486,6 +487,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public V put(K key, V value) {
+        return put(null, key, value);
+    }
+
+    public V put(Headers headers, K key, V value) {
         if (key == null) {
             throw new CacheException("Key should not be null");
         }
@@ -500,8 +505,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         ProducerRecord<byte[], byte[]> producerRecord;
         try {
             producerRecord =
-                new ProducerRecord<>(topic, this.keySerde.serializer().serialize(topic, key),
-                    value == null ? null : this.valueSerde.serializer().serialize(topic, value));
+                new ProducerRecord<>(
+                    topic,
+                    null,
+                    this.keySerde.serializer().serialize(topic, headers, key),
+                    value == null ? null : this.valueSerde.serializer().serialize(topic, headers, value),
+                    headers
+                );
         } catch (Exception e) {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
@@ -784,7 +794,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     try {
                         K messageKey;
                         try {
-                            messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                            messageKey = keySerde.deserializer().deserialize(topic, record.headers(), record.key());
                         } catch (Exception e) {
                             log.error("Failed to deserialize the key", e);
                             continue;
@@ -794,7 +804,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         try {
                             message =
                                 record.value() == null ? null
-                                    : valueSerde.deserializer().deserialize(topic, record.value());
+                                    : valueSerde.deserializer().deserialize(topic, record.headers(), record.value());
                         } catch (Exception e) {
                             log.error("Failed to deserialize a value", e);
                             continue;
@@ -825,10 +835,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     try {
                                         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
                                             topic,
+                                            null,
                                             record.key(),
                                             oldMessage == null ? null
                                                 : valueSerde.serializer()
-                                                    .serialize(topic, oldMessage)
+                                                    .serialize(topic, record.headers(), oldMessage),
+                                            record.headers()
                                         );
                                         producer.send(producerRecord);
                                         log.warn("Rollback invalid update to key {}", messageKey);

@@ -784,7 +784,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     try {
                         K messageKey;
                         try {
-                            messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                            messageKey = keySerde.deserializer().deserialize(topic, record.headers(), record.key());
                         } catch (Exception e) {
                             log.error("Failed to deserialize the key", e);
                             continue;
@@ -794,7 +794,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         try {
                             message =
                                 record.value() == null ? null
-                                    : valueSerde.deserializer().deserialize(topic, record.value());
+                                    : valueSerde.deserializer().deserialize(topic, record.headers(), record.value());
                         } catch (Exception e) {
                             log.error("Failed to deserialize a value", e);
                             continue;

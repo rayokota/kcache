@@ -50,7 +50,7 @@
         <bouncycastle.version>1.69</bouncycastle.version>
         <caffeine.version>2.8.8</caffeine.version>
         <guava.version>31.0.1-jre</guava.version>
-        <hikari.version>4.0.3</hikari.version>
+        <hikari.version>5.0.0</hikari.version>
         <jooq.version>3.14.11</jooq.version>
         <kafka.version>3.0.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>

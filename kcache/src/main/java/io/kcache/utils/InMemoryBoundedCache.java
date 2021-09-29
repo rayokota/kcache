@@ -75,9 +75,10 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
                     @Override
                     public V load(K key) throws Exception {
                         V value = loader.load(key);
-                        if (value != null) {
-                            delegate().put(key, value);
+                        if (value == null) {
+                            throw new NullPointerException();
                         }
+                        delegate().put(key, value);
                         return value;
                     }
                 }
@@ -120,7 +121,9 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
 
     @Override
     public V remove(final Object key) {
-        cache.invalidate(key);
+        if (key != null) {
+            cache.invalidate((K) key);
+        }
         return super.remove(key);
     }
 

@@ -81,7 +81,7 @@ public class PersistentCacheBenchmark {
     @Benchmark
     public void readRev(final Reader r, final Blackhole bh) {
         try (KeyValueIterator<byte[], byte[]> iterator = r.cache.descendingCache().all()) {
-            while (iterator.hasNext()) {
+            while (iterator != null && iterator.hasNext()) {
                 final KeyValue<byte[], byte[]> entry = iterator.next();
                 bh.consume(entry.value);
             }
@@ -91,7 +91,7 @@ public class PersistentCacheBenchmark {
     @Benchmark
     public void readSeq(final Reader r, final Blackhole bh) {
         try (KeyValueIterator<byte[], byte[]> iterator = r.cache.all()) {
-            while (iterator.hasNext()) {
+            while (iterator != null && iterator.hasNext()) {
                 final KeyValue<byte[], byte[]> entry = iterator.next();
                 bh.consume(entry.value);
             }

@@ -126,7 +126,9 @@ public class CaffeineCache<K, V> extends InMemoryCache<K, V> {
     @Override
     public V remove(final Object key) {
         final V originalValue = get(key);
-        cache.invalidate(key);
+        if (key != null) {
+            cache.invalidate(key);
+        }
         return originalValue;
     }
 

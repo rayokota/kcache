@@ -23,6 +23,7 @@ import io.kcache.CacheLoader;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * An in-memory cache with bounded size.
@@ -73,12 +74,12 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
             return cacheBuilder.build(
                 new com.google.common.cache.CacheLoader<K, V>() {
                     @Override
+                    @Nullable
                     public V load(K key) throws Exception {
                         V value = loader.load(key);
-                        if (value == null) {
-                            throw new NullPointerException();
+                        if (value != null) {
+                            delegate().put(key, value);
                         }
-                        delegate().put(key, value);
                         return value;
                     }
                 }

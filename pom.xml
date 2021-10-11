@@ -3,7 +3,7 @@
 
     <groupId>io.kcache</groupId>
     <artifactId>kcache-parent</artifactId>
-    <version>3.3.7-SNAPSHOT</version>
+    <version>4.0.2-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>kcache</name>
@@ -33,8 +33,10 @@
     <modules>
         <module>kcache</module>
         <module>kcache-bdbje</module>
+        <module>kcache-caffeine</module>
         <module>kcache-lmdb</module>
         <module>kcache-mapdb</module>
+        <module>kcache-rdbms</module>
         <module>kcache-rocksdb</module>
         <module>kcache-benchmark</module>
     </modules>
@@ -45,17 +47,20 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
-        <bouncycastle.version>1.67</bouncycastle.version>
-        <kafka.version>2.6.0</kafka.version>
+        <bouncycastle.version>1.69</bouncycastle.version>
+        <caffeine.version>2.8.8</caffeine.version>
+        <guava.version>31.0.1-jre</guava.version>
+        <hikari.version>4.0.3</hikari.version>
+        <jooq.version>3.14.11</jooq.version>
+        <kafka.version>3.0.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
-        <guava.version>29.0-jre</guava.version>
-        <kryo.version>5.0.0</kryo.version>
+        <kryo.version>5.2.0</kryo.version>
         <bdbje.version>18.3.12</bdbje.version>
-        <lmdb.version>0.8.1</lmdb.version>
+        <lmdb.version>0.8.2</lmdb.version>
         <mapdb.version>3.0.8</mapdb.version>
-        <rocksdb.version>6.7.3</rocksdb.version>
-        <scala.version>${kafka.scala.version}.3</scala.version>
-        <sl4j.version>1.7.30</sl4j.version>
+        <rocksdb.version>6.22.1.1</rocksdb.version>
+        <scala.version>2.13.6</scala.version>
+        <sl4j.version>1.7.32</sl4j.version>
     </properties>
 
     <dependencyManagement>
@@ -66,6 +71,11 @@
                 <version>${guava.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>${hikari.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
@@ -74,6 +84,16 @@
                 <groupId>com.sleepycat</groupId>
                 <artifactId>je</artifactId>
                 <version>${bdbje.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.ben-manes.caffeine</groupId>
+                <artifactId>caffeine</artifactId>
+                <version>${caffeine.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq</artifactId>
+                <version>${jooq.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.lmdbjava</groupId>
@@ -136,7 +156,7 @@
             <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
-                <version>4.13.1</version>
+                <version>4.13.2</version>
                 <scope>test</scope>
             </dependency>
             <dependency>
@@ -295,7 +315,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.3.1</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
@@ -308,7 +328,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
+                        <version>3.0.1</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -342,7 +362,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.2.0</version>
+                        <version>3.3.1</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
@@ -370,7 +390,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.1.4</version>
+                <version>4.4.1</version>
                 <configuration>
                     <effort>Max</effort>
                     <threshold>Default</threshold>

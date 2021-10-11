@@ -18,6 +18,7 @@ package io.kcache;
 
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.SSLClusterTestHarness;
+import java.util.Properties;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -25,15 +26,13 @@ import static org.junit.Assert.assertEquals;
 public class KafkaCacheSSLTest extends SSLClusterTestHarness {
     @Test
     public void testInitialization() throws Exception {
-        Cache<String, String> kafkaCache = CacheUtils.createAndInitSSLKafkaCacheInstance(bootstrapServers,
-            clientSslConfigs, requireSSLClientAuth());
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(requireSSLClientAuth());
         kafkaCache.close();
     }
 
     @Test(expected = CacheInitializationException.class)
     public void testInitializationWithoutClientAuth() throws Exception {
-        Cache<String, String> kafkaCache = CacheUtils.createAndInitSSLKafkaCacheInstance(bootstrapServers,
-            clientSslConfigs, false);
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(false);
         kafkaCache.close();
 
         // TODO: make the timeout shorter so the test fails quicker.
@@ -41,21 +40,31 @@ public class KafkaCacheSSLTest extends SSLClusterTestHarness {
 
     @Test(expected = CacheInitializationException.class)
     public void testDoubleInitialization() throws Exception {
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitSSLKafkaCacheInstance(bootstrapServers,
-            clientSslConfigs, requireSSLClientAuth())) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(requireSSLClientAuth())) {
             kafkaCache.init();
         }
     }
 
     @Test
     public void testSimplePut() throws Exception {
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitSSLKafkaCacheInstance(bootstrapServers,
-            clientSslConfigs, requireSSLClientAuth())) {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance(requireSSLClientAuth())) {
             String key = "Kafka";
             String value = "Rocks";
             kafkaCache.put(key, value);
             String retrievedValue = kafkaCache.get(key);
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
         }
+    }
+
+    protected Cache<String, String> createAndInitKafkaCacheInstance(boolean requireSSLClientAuth) {
+        Properties props = getKafkaCacheProperties();
+        return CacheUtils.createAndInitSSLKafkaCacheInstance(props, clientSslConfigs, requireSSLClientAuth);
+    }
+
+    protected Properties getKafkaCacheProperties() {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());
+        return props;
     }
 }

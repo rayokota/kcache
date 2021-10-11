@@ -30,7 +30,7 @@ public class KafkaDelegatingCacheTest extends KafkaCacheTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaDelegatingCacheTest.class);
 
     @Override
-    protected Cache<String, String> createAndInitKafkaCacheInstance(String bootstrapServers) {
+    protected Cache<String, String> createAndInitKafkaCacheInstance() {
         Cache<String, String> inMemoryCache = new InMemoryCache<>();
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);

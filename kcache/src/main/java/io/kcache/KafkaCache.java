@@ -16,9 +16,11 @@
 
 package io.kcache;
 
+import io.kcache.CacheUpdateHandler.ValidationStatus;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
+import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.OffsetCheckpoint;
 import io.kcache.utils.ShutdownableThread;
@@ -47,6 +49,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -61,7 +64,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,6 +99,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private int initTimeout;
     private int timeout;
     private String checkpointDir;
+    private int checkpointVersion;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
     private Consumer<byte[], byte[]> consumer;
@@ -155,6 +161,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
+        this.checkpointVersion = config.getInt(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_VERSION_CONFIG);
         this.cacheUpdateHandler =
             cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
@@ -173,28 +180,57 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             CacheType cacheType = CacheType.get(
                 config.getString(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG));
+            int maxSize = config.getInt(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG);
+            int expiry = config.getInt(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG);
             String clsName = null;
+            boolean isPersistent = false;
             switch (cacheType) {
                 case MEMORY:
-                    return new InMemoryCache<>(cmp);
+                    return maxSize >= 0 || expiry >= 0
+                        ? new InMemoryBoundedCache<>(maxSize, Duration.ofSeconds(expiry), null, cmp)
+                        : new InMemoryCache<>(cmp);
                 case BDBJE:
                     clsName = "io.kcache.bdbje.BdbJECache";
+                    isPersistent = true;
+                    break;
+                case CAFFEINE:
+                    clsName = "io.kcache.caffeine.CaffeineCache";
                     break;
                 case LMDB:
                     clsName = "io.kcache.lmdb.LmdbCache";
+                    isPersistent = true;
                     break;
                 case MAPDB:
                     clsName = "io.kcache.mapdb.MapDBCache";
+                    isPersistent = true;
+                    break;
+                case RDBMS:
+                    clsName = "io.kcache.rdbms.RdbmsCache";
+                    isPersistent = true;
                     break;
                 case ROCKSDB:
                     clsName = "io.kcache.rocksdb.RocksDBCache";
+                    isPersistent = true;
                     break;
             }
-            String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
-            Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class.forName(clsName);
-            Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
-                String.class, String.class, Serde.class, Serde.class, Comparator.class);
-            return ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
+            Class<? extends Cache<K, V>> cls = (Class<? extends Cache<K, V>>) Class
+                .forName(clsName);
+            Cache<K, V> cache;
+            if (isPersistent) {
+                String dataDir = config.getString(KafkaCacheConfig.KAFKACACHE_DATA_DIR_CONFIG);
+                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
+                    String.class, String.class, Serde.class, Serde.class, Comparator.class);
+                cache = ctor.newInstance(backingCacheName, dataDir, keySerde, valueSerde, cmp);
+            } else {
+                Constructor<? extends Cache<K, V>> ctor = cls.getConstructor(
+                    Integer.class, Duration.class, CacheLoader.class, Comparator.class);
+                cache = ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
+            }
+            Map<String, ?> configs = config.originalsWithPrefix(
+                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
+                    + cacheType.name().toLowerCase(Locale.ROOT) + ".");
+            cache.configure(configs);
+            return cache;
         } catch (Exception e) {
             throw new CacheInitializationException("Could not create backing cache", e);
         }
@@ -219,7 +255,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         if (localCache.isPersistent()) {
             try {
-                checkpointFile = new OffsetCheckpoint(checkpointDir, 0, topic);
+                checkpointFile = new OffsetCheckpoint(checkpointDir, checkpointVersion, topic);
                 checkpointFileCache.putAll(checkpointFile.read());
             } catch (IOException e) {
                 throw new CacheInitializationException("Failed to read checkpoints", e);
@@ -251,7 +287,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        this.cacheUpdateHandler.cacheInitialized();
+        this.cacheUpdateHandler.cacheInitialized(new HashMap<>(checkpointFileCache));
     }
 
     @Override
@@ -289,15 +325,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     private void addKafkaCacheConfigsToClientProperties(Properties props) {
-        // remove kcache used properties before passing on to delegated consumer and producer
-        // to avoid warnings
-        // thus unused props are  those that kcache should propagate
-
-        Map<String, Object> unusedProps = config.originals().entrySet().stream()
-            .filter(kv -> config.unused().contains(kv.getKey()))
-            .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-        KafkaCacheConfig vettedConfig = new KafkaCacheConfig(unusedProps);
-        props.putAll(vettedConfig.originalsWithPrefix("kafkacache."));
+        props.putAll(config.originalsWithPrefix("kafkacache."));
     }
 
     private void createOrVerifyTopic() throws CacheInitializationException {
@@ -348,12 +376,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
-        topicRequest.configs(
-            Collections.singletonMap(
-                TopicConfig.CLEANUP_POLICY_CONFIG,
-                TopicConfig.CLEANUP_POLICY_COMPACT
-            )
+        Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkastore.topic.config."));
+        topicConfigs.put(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_COMPACT
         );
+        topicRequest.configs(topicConfigs);
         try {
             admin.createTopics(Collections.singleton(topicRequest)).all()
                 .get(initTimeout, TimeUnit.MILLISECONDS);
@@ -458,6 +486,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public V put(K key, V value) {
+        return put(null, key, value);
+    }
+
+    public V put(Headers headers, K key, V value) {
         if (key == null) {
             throw new CacheException("Key should not be null");
         }
@@ -472,8 +504,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         ProducerRecord<byte[], byte[]> producerRecord;
         try {
             producerRecord =
-                new ProducerRecord<>(topic, this.keySerde.serializer().serialize(topic, key),
-                    value == null ? null : this.valueSerde.serializer().serialize(topic, value));
+                new ProducerRecord<>(
+                    topic,
+                    null,
+                    this.keySerde.serializer().serialize(topic, headers, key),
+                    value == null ? null : this.valueSerde.serializer().serialize(topic, headers, value),
+                    headers
+                );
         } catch (Exception e) {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
@@ -751,11 +788,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                cacheUpdateHandler.startBatch(records.count());
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     try {
                         K messageKey;
                         try {
-                            messageKey = keySerde.deserializer().deserialize(topic, record.key());
+                            messageKey = keySerde.deserializer().deserialize(topic, record.headers(), record.key());
                         } catch (Exception e) {
                             log.error("Failed to deserialize the key", e);
                             continue;
@@ -765,7 +803,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         try {
                             message =
                                 record.value() == null ? null
-                                    : valueSerde.deserializer().deserialize(topic, record.value());
+                                    : valueSerde.deserializer().deserialize(topic, record.headers(), record.value());
                         } catch (Exception e) {
                             log.error("Failed to deserialize a value", e);
                             continue;
@@ -773,30 +811,47 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
                         long offset = record.offset();
                         long timestamp = record.timestamp();
-                        if (cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp)) {
-                            log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
-                            V oldMessage;
-                            if (message == null) {
-                                oldMessage = localCache.remove(messageKey);
-                            } else {
-                                oldMessage = localCache.put(messageKey, message);
-                            }
-                            cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
-                        } else if (!readOnly){
-                            V oldMessage = localCache.get(messageKey);
-                            try {
-                                ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                                    topic,
-                                    record.key(),
-                                    oldMessage == null ? null : valueSerde.serializer().serialize(topic, oldMessage)
-                                );
-                                producer.send(producerRecord);
+                        ValidationStatus status =
+                            cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp);
+                        V oldMessage;
+                        switch (status) {
+                            case SUCCESS:
+                                log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
+                                if (message == null) {
+                                    oldMessage = localCache.remove(messageKey);
+                                } else {
+                                    oldMessage = localCache.put(messageKey, message);
+                                }
+                                cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
+                                break;
+                            case ROLLBACK_FAILURE:
+                                if (readOnly) {
+                                    log.warn("Ignore invalid update to key {}", messageKey);
+                                    break;
+                                }
+                                oldMessage = localCache.get(messageKey);
+                                if (!Objects.equals(message, oldMessage)) {
+                                    try {
+                                        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
+                                            topic,
+                                            null,
+                                            record.key(),
+                                            oldMessage == null ? null
+                                                : valueSerde.serializer()
+                                                    .serialize(topic, record.headers(), oldMessage),
+                                            record.headers()
+                                        );
+                                        producer.send(producerRecord);
+                                        log.warn("Rollback invalid update to key {}", messageKey);
+                                    } catch (KafkaException ke) {
+                                        log.error("Failed to rollback invalid update to key {}",
+                                            messageKey, ke);
+                                    }
+                                }
+                                break;
+                            case IGNORE_FAILURE:
                                 log.warn("Ignore invalid update to key {}", messageKey);
-                            } catch (KafkaException ke) {
-                                log.error("Failed to recover from invalid update to key {}", messageKey, ke);
-                            }
-                        } else {
-                            log.warn("Ignore invalid update to key {}", messageKey);
+                                break;
                         }
                     } catch (Exception se) {
                         log.error("Failed to add record from the Kafka topic "
@@ -806,16 +861,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                count = records.count();
-                cacheUpdateHandler.checkpoint(count);
                 if (localCache.isPersistent() && initialized.get()) {
                     try {
                         localCache.flush();
-                        checkpointOffsets();
+                        Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(records.count());
+                        checkpointOffsets(offsets);
                     } catch (CacheException e) {
                         log.warn("Failed to flush", e);
                     }
                 }
+                cacheUpdateHandler.endBatch(records.count());
             } catch (WakeupException we) {
                 // do nothing
             } catch (RecordTooLargeException rtle) {
@@ -839,11 +894,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void checkpointOffsets() {
-            Map<TopicPartition, Long> offsets = offsetsInTopic.entrySet()
-                .stream()
-                .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
-            checkpointFileCache.putAll(offsets);
+        private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
+            Map<TopicPartition, Long> newOffsets = offsets != null
+                ? offsets
+                : offsetsInTopic.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
+            checkpointFileCache.putAll(newOffsets);
             try {
                 checkpointFile.write(checkpointFileCache);
             } catch (final IOException e) {

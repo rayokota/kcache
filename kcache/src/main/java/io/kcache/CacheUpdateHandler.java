@@ -16,6 +16,7 @@
 
 package io.kcache;
 
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
@@ -23,10 +24,25 @@ import java.io.IOException;
 
 public interface CacheUpdateHandler<K, V> extends Closeable {
 
+    enum ValidationStatus {
+        SUCCESS,
+        ROLLBACK_FAILURE,
+        IGNORE_FAILURE
+    }
+
     /**
      * Invoked after the cache is initialized.
+     *
+     * @param checkpoints current checkpoints
      */
-    default void cacheInitialized() {
+    default void cacheInitialized(Map<TopicPartition, Long> checkpoints) {
+    }
+
+    /**
+     * Invoked before a batch of updates.
+     * @param count batch count
+     */
+    default void startBatch(int count) {
     }
 
     /**
@@ -39,8 +55,8 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param timestamp timestamp
      * @return whether the update should proceed
      */
-    default boolean validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
-        return true;
+    default ValidationStatus validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
+        return ValidationStatus.SUCCESS;
     }
 
     /**
@@ -56,11 +72,21 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
 
     /**
+     * Retrieve the offsets to checkpoint.
+     *
+     * @param count batch count
+     * @return the offsets to checkpoint, or null
+     */
+    default Map<TopicPartition, Long> checkpoint(int count) {
+        return null;
+    }
+
+    /**
      * Invoked after a batch of updates.
      *
      * @param count batch count
      */
-    default void checkpoint(int count) {
+    default void endBatch(int count) {
     }
 
     @Override

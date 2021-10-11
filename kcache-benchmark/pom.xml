@@ -4,7 +4,7 @@
     <parent>
         <artifactId>kcache-parent</artifactId>
         <groupId>io.kcache</groupId>
-        <version>3.3.7-SNAPSHOT</version>
+        <version>4.0.2-SNAPSHOT</version>
     </parent>
 
     <groupId>io.kcache</groupId>
@@ -12,7 +12,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <jmh.version>1.26</jmh.version>
+        <jmh.version>1.33</jmh.version>
     </properties>
 
     <dependencies>
@@ -32,19 +32,25 @@
         <dependency>
             <groupId>org.agrona</groupId>
             <artifactId>agrona</artifactId>
-            <version>1.8.0</version>
+            <version>1.12.0</version>
         </dependency>
 
         <dependency>
             <groupId>com.github.jnr</groupId>
             <artifactId>jnr-posix</artifactId>
-            <version>3.1.2</version>
+            <version>3.1.10</version>
             <exclusions>
                 <exclusion>
                     <groupId>com.github.jnr</groupId>
                     <artifactId>jnr-constants</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.derby</groupId>
+            <artifactId>derby</artifactId>
+            <version>10.14.2.0</version>
         </dependency>
 
         <dependency>
@@ -65,6 +71,11 @@
         <dependency>
             <groupId>io.kcache</groupId>
             <artifactId>kcache-mapdb</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.kcache</groupId>
+            <artifactId>kcache-rdbms</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

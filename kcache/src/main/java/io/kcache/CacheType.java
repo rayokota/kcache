@@ -25,8 +25,10 @@ import java.util.Map;
 public enum CacheType {
     MEMORY,
     BDBJE,
+    CAFFEINE,
     LMDB,
     MAPDB,
+    RDBMS,
     ROCKSDB;
 
     private static final Map<String, CacheType> lookup = new HashMap<>();

@@ -4,7 +4,7 @@
     <parent>
         <artifactId>kcache-parent</artifactId>
         <groupId>io.kcache</groupId>
-        <version>3.3.7-SNAPSHOT</version>
+        <version>4.0.2-SNAPSHOT</version>
     </parent>
 
     <groupId>io.kcache</groupId>
@@ -40,9 +40,9 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
-	<dependency>
-	    <groupId>com.sleepycat</groupId>
-	    <artifactId>je</artifactId>
+        <dependency>
+            <groupId>com.sleepycat</groupId>
+            <artifactId>je</artifactId>
         </dependency>
         <!-- TESTING -->
         <dependency>

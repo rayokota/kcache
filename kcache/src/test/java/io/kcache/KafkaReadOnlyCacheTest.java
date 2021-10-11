@@ -18,8 +18,8 @@ package io.kcache;
 
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.utils.Caches;
 import io.kcache.utils.ClusterTestHarness;
-import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.StringUpdateHandler;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -36,14 +36,10 @@ import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static io.kcache.KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
@@ -62,14 +58,14 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
 
     @Test(expected = CacheInitializationException.class)
     public void testInitialization() throws IOException {
-        try (Cache<String, String> cache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> cache = createKafkaCacheInstance()) {
             cache.init();
         }
     }
 
     @Test
     public void testInitializationGivenTopicAlreadyExists() throws IOException {
-        try (Cache<String, String> cache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> cache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             cache.init();
         }
@@ -77,7 +73,7 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimplePut() throws Exception {
-        try (Cache<String, String> kafkaCache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             kafkaCache.init();
             kafkaCache.put("Kafka", "Rocks");
@@ -89,7 +85,7 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSimpleRemove() throws Exception {
-        try (Cache<String, String> kafkaCache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             kafkaCache.init();
             kafkaCache.remove("Kafka");
@@ -101,7 +97,7 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
     
     @Test(expected = UnsupportedOperationException.class)
     public void testKeySetIsImmutable() throws Exception {
-        try (Cache<String, String> kafkaCache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             kafkaCache.init();
             kafkaCache.keySet().remove("Kafka");
@@ -110,7 +106,7 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
 
     @Test(expected = UnsupportedOperationException.class)
     public void testEntrySetIsImmutable() throws Exception {
-        try (Cache<String, String> kafkaCache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             kafkaCache.init();
             kafkaCache.entrySet().add(new AbstractMap.SimpleEntry<>("Kafka", "Rocks"));
@@ -119,33 +115,12 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
 
     @Test(expected = UnsupportedOperationException.class)
     public void testValuesIsImmutable() throws Exception {
-        try (Cache<String, String> kafkaCache = createKafkaReadOnlyCacheInstance(bootstrapServers)) {
+        try (Cache<String, String> kafkaCache = createKafkaCacheInstance()) {
             createTopic(bootstrapServers);
             kafkaCache.init();
             kafkaCache.values().add("Kafka");
         }
     }
-
-    private Cache<String, String> createKafkaReadOnlyCacheInstance(String bootstrapServers) throws CacheInitializationException {
-        return createKafkaReadOnlyCacheInstance(bootstrapServers, new InMemoryCache<>());
-    }
-
-    private Cache<String, String> createKafkaReadOnlyCacheInstance(
-        String bootstrapServers,
-        Cache<String, String> backingCache
-    ) throws CacheInitializationException {
-        Properties props = new Properties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_READ_ONLY_CONFIG, true);
-
-        return new KafkaCache<>(new KafkaCacheConfig(props),
-            Serdes.String(),
-            Serdes.String(),
-            new StringUpdateHandler(),
-            backingCache
-        );
-    }
-
 
     private void createTopic(String bootstrapServers) throws CacheInitializationException {
         Properties props = new Properties();
@@ -163,5 +138,25 @@ public class KafkaReadOnlyCacheTest extends ClusterTestHarness {
         } catch (Exception e) {
             throw new CacheInitializationException("Failed to create topic", e);
         }
+    }
+
+    private Cache<String, String> createKafkaCacheInstance() {
+        Properties props = getKafkaCacheProperties();
+        KafkaCacheConfig config = new KafkaCacheConfig(props);
+        Cache<String, String> kafkaCache = Caches.concurrentCache(
+            new KafkaCache<>(config,
+                Serdes.String(),
+                Serdes.String(),
+                new StringUpdateHandler(),
+                null));
+        return kafkaCache;
+    }
+
+    protected Properties getKafkaCacheProperties() {
+        Properties props = new Properties();
+        props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_READ_ONLY_CONFIG, true);
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.name().toLowerCase());
+        return props;
     }
 }

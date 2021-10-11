@@ -17,6 +17,8 @@
 package io.kcache;
 
 import io.kcache.utils.EnumRecommender;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -47,7 +49,7 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.group.id</code>
      */
     public static final String KAFKACACHE_GROUP_ID_CONFIG = "kafkacache.group.id";
-    public static final String DEFAULT_KAFKACACHE_GROUP_ID = "kafkacache";
+    public static final String DEFAULT_KAFKACACHE_GROUP_ID_PREFIX = "kafka-cache";
     /**
      * <code>kafkacache.client.id</code>
      */
@@ -92,9 +94,21 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_BACKING_CACHE_CONFIG = "kafkacache.backing.cache";
     /**
+     * <code>kafkacache.bounded.cache.size</code>
+     */
+    public static final String KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG = "kafkacache.bounded.cache.size";
+    /**
+     * <code>kafkacache.bounded.cache.expiry.secs</code>
+     */
+    public static final String KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG = "kafkacache.bounded.cache.expiry.secs";
+    /**
      * <code>kafkacache.checkpoint.dir</code>
      */
     public static final String KAFKACACHE_CHECKPOINT_DIR_CONFIG = "kafkacache.checkpoint.dir";
+    /**
+     * <code>kafkacache.checkpoint.version</code>
+     */
+    public static final String KAFKACACHE_CHECKPOINT_VERSION_CONFIG = "kafkacache.checkpoint.version";
     /**
      * <code>kafkacache.data.dir</code>
      */
@@ -147,7 +161,8 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_BOOTSTRAP_SERVERS_DOC =
         "A list of Kafka brokers to connect to. For example, `PLAINTEXT://hostname:9092,SSL://hostname2:9092`.";
     protected static final String KAFKACACHE_GROUP_ID_DOC =
-        "Use this setting to override the group.id for the Kafka cache consumer.";
+        "Use this setting to override the group.id for the Kafka cache consumer. "
+            + "The default is \"kafka-cache-<host>\"";
     protected static final String KAFKACACHE_CLIENT_ID_DOC =
         "Use this setting to override the client.id for the Kafka cache consumer.";
     protected static final String KAFKACACHE_TOPIC_DOC =
@@ -169,9 +184,15 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_TIMEOUT_DOC =
         "The timeout for an operation on the Kafka cache.";
     protected static final String KAFKACACHE_BACKING_CACHE_DOC =
-        "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, and `rocksdb`.";
+        "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, `rdbms`, and `rocksdb`.";
+    protected static final String KAFKACACHE_BOUNDED_CACHE_SIZE_DOC =
+        "For an in-memory cache, the maximum size of the cache.";
+    protected static final String KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_DOC =
+        "For an in-memory cache, the expiration in seconds for entries added to the cache.";
     protected static final String KAFKACACHE_CHECKPOINT_DIR_DOC =
         "For persistent backing caches, the directory in which to store offset checkpoints.";
+    protected static final String KAFKACACHE_CHECKPOINT_VERSION_DOC =
+        "For persistent backing caches, the version of the checkpoint offset file.";
     protected static final String KAFKACACHE_DATA_DIR_DOC =
         "For persistent backing caches, the directory in which to store data.";
 
@@ -267,13 +288,23 @@ public class KafkaCacheConfig extends AbstractConfig {
                 new EnumRecommender<>(CacheType.class, e -> e.toLowerCase(Locale.ROOT)),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_BACKING_CACHE_DOC
             )
+            .define(KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, -1,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_BOUNDED_CACHE_SIZE_DOC
+            )
+            .define(KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, -1,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_BOUNDED_CACHE_EXPIRY_SECS_DOC
+            )
             .define(KAFKACACHE_CHECKPOINT_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_DIR_DOC
+            )
+            .define(KAFKACACHE_CHECKPOINT_VERSION_CONFIG, ConfigDef.Type.INT, 0,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_VERSION_DOC
             )
             .define(KAFKACACHE_DATA_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_DATA_DIR_DOC
             )
-            .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING, DEFAULT_KAFKACACHE_GROUP_ID,
+            .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING,
+                DEFAULT_KAFKACACHE_GROUP_ID_PREFIX + "-" + getDefaultHost(),
                 ConfigDef.Importance.LOW, KAFKACACHE_GROUP_ID_DOC
             )
             .define(KAFKACACHE_CLIENT_ID_CONFIG, ConfigDef.Type.STRING, null,
@@ -425,5 +456,13 @@ public class KafkaCacheConfig extends AbstractConfig {
             throw new ConfigException("Couldn't load properties from " + propsFile, e);
         }
         return props;
+    }
+
+    private static String getDefaultHost() {
+        try {
+            return InetAddress.getLocalHost().getCanonicalHostName();
+        } catch (UnknownHostException e) {
+            throw new ConfigException("Unknown local hostname", e);
+        }
     }
 }

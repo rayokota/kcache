@@ -24,7 +24,10 @@ import io.kcache.exceptions.CacheInitializationException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Objects;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -43,12 +46,17 @@ import java.util.stream.Collectors;
 /**
  * A persistent key-value store.
  */
-public abstract class PersistentCache<K, V> implements Cache<K, V> {
+public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable {
     private static final Logger log = LoggerFactory.getLogger(PersistentCache.class);
+
+    public static final String DELETEME_FILE_NAME = "deleteme";
+    public static final String MOVEME_FILE_NAME = "moveme";
 
     private static final Comparator<byte[]> BYTES_COMPARATOR = SignedBytes.lexicographicalComparator();
 
     private final String name;
+    private final String parentDir;
+    private final String rootDir;
     private final File dbDir;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -63,6 +71,8 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
                            Serde<V> valueSerde,
                            Comparator<K> comparator) {
         this.name = name;
+        this.parentDir = parentDir;
+        this.rootDir = rootDir;
         this.dbDir = new File(new File(rootDir, parentDir), name);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -78,6 +88,14 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
 
     public String name() {
         return name;
+    }
+
+    public String parentDir() {
+        return parentDir;
+    }
+
+    public String rootDir() {
+        return rootDir;
     }
 
     public File dbDir() {
@@ -100,6 +118,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
     @Override
     public synchronized void init() {
         try {
+            checkForDeleteOrMove();
             Files.createDirectories(dbDir.getParentFile().toPath());
             Files.createDirectories(dbDir.getAbsoluteFile().toPath());
         } catch (final IOException fatal) {
@@ -109,6 +128,40 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         // open the DB dir
         openDB();
         open = true;
+    }
+
+    private void checkForDeleteOrMove() throws IOException {
+        File deleteme = new File(rootDir, DELETEME_FILE_NAME);
+        File moveme = new File(rootDir, MOVEME_FILE_NAME);
+        if (deleteme.exists()) {
+            File dir = new File(rootDir);
+            if (!deleteDirectory(dir)) {
+                log.error("Could not delete root dir: {}", dir);
+            }
+        } else if (moveme.exists()) {
+            File backupDir = new File(rootDir + ".bak");
+            if (backupDir.exists()) {
+                if (!deleteDirectory(backupDir)) {
+                    log.error("Could not delete backup dir: {}", backupDir);
+                } else {
+                    Files.move(Paths.get(rootDir), backupDir.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+                }
+            } else {
+                Files.move(Paths.get(rootDir), backupDir.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    private static boolean deleteDirectory(File directoryToBeDeleted) {
+        File[] allContents = directoryToBeDeleted.listFiles();
+        if (allContents != null) {
+            for (File file : allContents) {
+                deleteDirectory(file);
+            }
+        }
+        return directoryToBeDeleted.delete();
     }
 
     protected abstract void openDB();
@@ -364,7 +417,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V> {
         }
 
         public void putAll(Map<? extends K, ? extends V> entries) {
-            for (Entry<? extends K, ? extends V> e : m.entrySet()) {
+            for (Entry<? extends K, ? extends V> e : entries.entrySet()) {
                 put(e.getKey(), e.getValue());
             }
         }

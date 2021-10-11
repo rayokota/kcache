@@ -1,11 +1,11 @@
 # KCache - An In-Memory Cache Backed by Apache Kafka
 
-[![Build Status][travis-shield]][travis-link]
+[![Build Status][github-actions-shield]][github-actions-link]
 [![Maven][maven-shield]][maven-link]
 [![Javadoc][javadoc-shield]][javadoc-link]
 
-[travis-shield]: https://travis-ci.org/rayokota/kcache.svg?branch=master
-[travis-link]: https://travis-ci.org/rayokota/kcache
+[github-actions-shield]: https://github.com/rayokota/kcache/workflows/build/badge.svg?branch=master
+[github-actions-link]: https://github.com/rayokota/kcache/actions
 [maven-shield]: https://img.shields.io/maven-central/v/io.kcache/kcache.svg
 [maven-link]: https://search.maven.org/#search%7Cga%7C1%7Cio.kcache
 [javadoc-shield]: https://javadoc.io/badge/io.kcache/kcache.svg?color=blue
@@ -21,7 +21,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>3.3.1</version>
+    <version>4.0.1</version>
 </dependency>
 ```
 
@@ -70,7 +70,7 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 300 seconds.
 - `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
-- `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `lmdb`, `mapdb` or `rocksdb`.
+- `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `caffeine`, `lmdb`, `mapdb`, `rdbms`, or `rocksdb`.
 - `kafkacache.data.dir` - The root directory for backing cache storage.  Defaults to `/tmp`.
 
 Configuration properties can be passed as follows:

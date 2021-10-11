@@ -33,10 +33,13 @@ import io.kcache.KeyValueIterator;
 import io.kcache.bdbje.BdbJECache;
 import io.kcache.lmdb.LmdbCache;
 import io.kcache.mapdb.MapDBCache;
+import io.kcache.rdbms.RdbmsCache;
 import io.kcache.rocksdb.RocksDBCache;
 import io.kcache.utils.PersistentCache;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -78,7 +81,7 @@ public class PersistentCacheBenchmark {
     @Benchmark
     public void readRev(final Reader r, final Blackhole bh) {
         try (KeyValueIterator<byte[], byte[]> iterator = r.cache.descendingCache().all()) {
-            while (iterator.hasNext()) {
+            while (iterator != null && iterator.hasNext()) {
                 final KeyValue<byte[], byte[]> entry = iterator.next();
                 bh.consume(entry.value);
             }
@@ -88,7 +91,7 @@ public class PersistentCacheBenchmark {
     @Benchmark
     public void readSeq(final Reader r, final Blackhole bh) {
         try (KeyValueIterator<byte[], byte[]> iterator = r.cache.all()) {
-            while (iterator.hasNext()) {
+            while (iterator != null && iterator.hasNext()) {
                 final KeyValue<byte[], byte[]> entry = iterator.next();
                 bh.consume(entry.value);
             }
@@ -104,7 +107,7 @@ public class PersistentCacheBenchmark {
     @SuppressWarnings("checkstyle:visibilitymodifier")
     public static class CommonKafkaCache extends Common {
 
-        @Param({"bdbje", "lmdb", "mapdb", "rocksdb"})
+        @Param({"bdbje", "lmdb", "mapdb", "rdbms", "rocksdb"})
         String cacheType;
 
         PersistentCache<byte[], byte[]> cache;
@@ -170,6 +173,14 @@ public class PersistentCacheBenchmark {
                     return new LmdbCache<>(name, dataDir, serde, serde, null);
                 case MAPDB:
                     return new MapDBCache<>(name, dataDir, serde, serde, null);
+                case RDBMS:
+                    PersistentCache<byte[], byte[]> cache =
+                        new RdbmsCache<>(name, dataDir, serde, serde, null);
+                    Map<String, Object> configs = new HashMap<>();
+                    configs.put(RdbmsCache.JDBC_URL_CONFIG, "jdbc:derby:" + dataDir + "/kcache;create=true");
+                    configs.put(RdbmsCache.DIALECT_CONFIG, "DERBY");
+                    cache.configure(configs);
+                    return cache;
                 case ROCKSDB:
                     return new RocksDBCache<>(name, dataDir, serde, serde, null);
                 default:

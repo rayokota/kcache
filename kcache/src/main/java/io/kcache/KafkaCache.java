@@ -321,6 +321,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
         return new KafkaProducer<>(producerProps);
     }

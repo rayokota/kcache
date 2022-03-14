@@ -20,6 +20,7 @@ import io.kcache.CacheUpdateHandler.ValidationStatus;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
+import io.kcache.exceptions.EntryTooLargeException;
 import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.PersistentCache;
@@ -529,7 +530,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
-            throw new CacheException("Put operation failed while waiting for an ack from Kafka", e);
+            if (e.getCause() instanceof RecordTooLargeException) {
+                throw new EntryTooLargeException("Put operation failed because entry is too large");
+            } else {
+                throw new CacheException("Put operation failed while waiting for an ack from Kafka", e);
+            }
         } catch (TimeoutException e) {
             throw new CacheTimeoutException(
                 "Put operation timed out while waiting for an ack from Kafka", e);

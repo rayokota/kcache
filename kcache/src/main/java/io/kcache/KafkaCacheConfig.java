@@ -148,6 +148,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "kafkacache.sasl.kerberos.service.name";
     public static final String KAFKACACHE_SASL_MECHANISM_CONFIG =
         "kafkacache.sasl.mechanism";
+    public static final String KAFKACACHE_SASL_JAAS_CONFIG_CONFIG =
+        "kafkacache.sasl.jaas.config";
     public static final String KAFKACACHE_SASL_KERBEROS_KINIT_CMD_CONFIG =
         "kafkacache.sasl.kerberos.kinit.cmd";
     public static final String KAFKACACHE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG =
@@ -234,6 +236,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "config file or here.";
     protected static final String KAFKACACHE_SASL_MECHANISM_DOC =
         "The SASL mechanism used for Kafka connections. GSSAPI is the default.";
+    protected static final String KAFKACACHE_SASL_JAAS_CONFIG_DOC =
+        "The JAAS login context parameters for SASL connections.";
     protected static final String KAFKACACHE_SASL_KERBEROS_KINIT_CMD_DOC =
         "The Kerberos kinit command path.";
     protected static final String KAFKACACHE_SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC =
@@ -377,6 +381,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_SASL_MECHANISM_CONFIG, ConfigDef.Type.STRING,
                 "GSSAPI", ConfigDef.Importance.MEDIUM,
                 KAFKACACHE_SASL_MECHANISM_DOC
+            )
+            .define(KAFKACACHE_SASL_JAAS_CONFIG_CONFIG, ConfigDef.Type.STRING,
+                null, ConfigDef.Importance.MEDIUM,
+                KAFKACACHE_SASL_JAAS_CONFIG_DOC
             )
             .define(KAFKACACHE_SASL_KERBEROS_KINIT_CMD_CONFIG, ConfigDef.Type.STRING,
                 "/usr/bin/kinit", ConfigDef.Importance.LOW,

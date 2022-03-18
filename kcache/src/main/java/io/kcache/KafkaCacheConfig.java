@@ -382,7 +382,7 @@ public class KafkaCacheConfig extends AbstractConfig {
                 "GSSAPI", ConfigDef.Importance.MEDIUM,
                 KAFKACACHE_SASL_MECHANISM_DOC
             )
-            .define(KAFKACACHE_SASL_JAAS_CONFIG_CONFIG, ConfigDef.Type.STRING,
+            .define(KAFKACACHE_SASL_JAAS_CONFIG_CONFIG, ConfigDef.Type.PASSWORD,
                 null, ConfigDef.Importance.MEDIUM,
                 KAFKACACHE_SASL_JAAS_CONFIG_DOC
             )

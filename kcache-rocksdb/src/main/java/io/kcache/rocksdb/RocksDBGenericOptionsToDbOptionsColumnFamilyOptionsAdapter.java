@@ -356,16 +356,6 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        dbOptions.setBaseBackgroundCompactions(baseBackgroundCompactions);
-    }
-
-    @Override
-    public int baseBackgroundCompactions() {
-        return dbOptions.baseBackgroundCompactions();
-    }
-
-    @Override
     public Options setMaxBackgroundCompactions(final int maxBackgroundCompactions) {
         dbOptions.setMaxBackgroundCompactions(maxBackgroundCompactions);
         return this;
@@ -623,17 +613,6 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     @Override
     public AccessHint accessHintOnCompactionStart() {
         return dbOptions.accessHintOnCompactionStart();
-    }
-
-    @Override
-    public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        dbOptions.setNewTableReaderForCompactionInputs(newTableReaderForCompactionInputs);
-        return this;
-    }
-
-    @Override
-    public boolean newTableReaderForCompactionInputs() {
-        return dbOptions.newTableReaderForCompactionInputs();
     }
 
     @Override

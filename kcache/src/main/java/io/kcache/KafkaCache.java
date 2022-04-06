@@ -489,19 +489,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public V put(K key, V value) {
-        return put(null, key, value);
+        return put(null, key, value).getOldValue();
     }
 
-    public V put(Headers headers, K key, V value) {
-        if (key == null) {
-            throw new CacheException("Key should not be null");
-        }
+    public Metadata<V> put(Headers headers, K key, V value) {
         if (readOnly) {
             throw new CacheException("Cache is read-only");
         }
 
         assertInitialized();
-        V oldValue = get(key);
+        V oldValue = key != null ? get(key) : null;
 
         // write to the Kafka topic
         ProducerRecord<byte[], byte[]> producerRecord;
@@ -510,7 +507,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 new ProducerRecord<>(
                     topic,
                     null,
-                    this.keySerde.serializer().serialize(topic, headers, key),
+                    key == null ? null : this.keySerde.serializer().serialize(topic, headers, key),
                     value == null ? null : this.valueSerde.serializer().serialize(topic, headers, value),
                     headers
                 );
@@ -518,10 +515,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
 
+        RecordMetadata recordMetadata;
         try {
             log.trace("Sending record to Kafka cache topic: {}", producerRecord);
             Future<RecordMetadata> ack = producer.send(producerRecord);
-            RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+            recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
             log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
             int lastWrittenPartition = recordMetadata.partition();
@@ -542,7 +540,51 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheException("Put operation to Kafka failed", ke);
         }
 
-        return oldValue;
+        return new Metadata<>(recordMetadata, oldValue);
+    }
+
+    public static class Metadata<V> {
+        private final RecordMetadata recordMetadata;
+        private final V oldValue;
+
+        public Metadata(RecordMetadata recordMetadata, V oldValue) {
+            this.recordMetadata = recordMetadata;
+            this.oldValue = oldValue;
+        }
+
+        public RecordMetadata getRecordMetadata() {
+            return recordMetadata;
+        }
+
+        public V getOldValue() {
+            return oldValue;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            Metadata<?> metadata = (Metadata<?>) o;
+            return Objects.equals(recordMetadata, metadata.recordMetadata)
+                && Objects.equals(oldValue, metadata.oldValue);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(recordMetadata, oldValue);
+        }
+
+        @Override
+        public String toString() {
+            return "Metadata{" +
+                "recordMetadata=" + recordMetadata +
+                ", oldValue=" + oldValue +
+                '}';
+        }
     }
 
     @Override
@@ -820,19 +862,21 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         long timestamp = record.timestamp();
                         ValidationStatus status =
                             cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp);
-                        V oldMessage;
+                        V oldMessage = null;
                         switch (status) {
                             case SUCCESS:
-                                log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
-                                if (message == null) {
-                                    oldMessage = localCache.remove(messageKey);
-                                } else {
-                                    oldMessage = localCache.put(messageKey, message);
+                                if (messageKey != null) {
+                                    log.trace("Applying update ({}, {}) to the local cache", messageKey, message);
+                                    if (message == null) {
+                                        oldMessage = localCache.remove(messageKey);
+                                    } else {
+                                        oldMessage = localCache.put(messageKey, message);
+                                    }
                                 }
                                 cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
                                 break;
                             case ROLLBACK_FAILURE:
-                                if (readOnly) {
+                                if (readOnly || messageKey == null) {
                                     log.warn("Ignore invalid update to key {}", messageKey);
                                     break;
                                 }

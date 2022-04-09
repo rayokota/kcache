@@ -52,6 +52,7 @@
         <guava.version>31.1-jre</guava.version>
         <hikari.version>4.0.3</hikari.version>
         <jooq.version>3.14.11</jooq.version>
+        <junit.version>4.13.2</junit.version>
         <kafka.version>3.1.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <kryo.version>5.3.0</kryo.version>
@@ -156,7 +157,7 @@
             <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
-                <version>4.13.2</version>
+                <version>${junit.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>

@@ -17,13 +17,13 @@
 package io.kcache;
 
 import io.kcache.CacheUpdateHandler.ValidationStatus;
+import io.kcache.KafkaCacheConfig.Offset;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.exceptions.EntryTooLargeException;
 import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
-import io.kcache.utils.PersistentCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -89,6 +90,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private String topic;
     private int desiredReplicationFactor;
     private int desiredNumPartitions;
+    private List<Integer> partitions;
+    private Offset offset;
     private String groupId;
     private String clientId;
     private CacheUpdateHandler<K, V> cacheUpdateHandler;
@@ -153,6 +156,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
         this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
         this.desiredNumPartitions = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG);
+        this.partitions = config.partitions();
+        this.offset = config.offset();
         this.groupId = config.getString(KafkaCacheConfig.KAFKACACHE_GROUP_ID_CONFIG);
         this.clientId = config.getString(KafkaCacheConfig.KAFKACACHE_CLIENT_ID_CONFIG);
         if (this.clientId == null) {
@@ -380,7 +385,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
-        Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkastore.topic.config."));
+        Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkacache.topic.config."));
         topicConfigs.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_COMPACT
@@ -406,7 +411,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         Set<String> topics = Collections.singleton(topic);
         Map<String, TopicDescription> topicDescription;
         try {
-            topicDescription = admin.describeTopics(topics).all().get(initTimeout, TimeUnit.MILLISECONDS);
+            topicDescription = admin.describeTopics(topics).allTopicNames().get(initTimeout, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
                 log.warn("Could not validate existing topic.");
@@ -719,9 +724,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
      * Thread that reads data from the Kafka compacted topic and modifies
      * the local cache to be consistent.
      *
-     * <p>On startup, this thread will always read from the beginning of the topic. We assume
+     * <p>On startup, this thread will always read from a specified start of the topic. We assume
      * the topic will always be small, hence the startup time to read the topic won't take
-     * too long. Because the topic is always read from the beginning, the consumer never
+     * too long. Because the topic is always read from a specified start, the consumer never
      * commits offsets.
      */
     private class WorkerThread extends ShutdownableThread {
@@ -741,32 +746,36 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             offsetUpdateLock = new ReentrantLock();
             offsetReachedThreshold = offsetUpdateLock.newCondition();
 
-            // Include a few retries since topic creation may take some time to propagate and
-            // cache is often started immediately after creating the topic.
-            int retries = 0;
-            List<PartitionInfo> partitions = null;
-            while (retries++ < 10) {
-                partitions = consumer.partitionsFor(topic);
-                if (partitions != null && partitions.size() >= 1) {
-                    break;
-                }
+            if (partitions.isEmpty()) {
+                // Include a few retries since topic creation may take some time to propagate and
+                // cache is often started immediately after creating the topic.
+                int retries = 0;
+                List<PartitionInfo> partitionInfos = null;
+                while (retries++ < 10) {
+                    partitionInfos = consumer.partitionsFor(topic);
+                    if (partitionInfos != null && !partitionInfos.isEmpty()) {
+                        partitions = partitionInfos.stream()
+                            .map(PartitionInfo::partition)
+                            .collect(Collectors.toList());
+                        break;
+                    }
 
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    // ignore
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        // ignore
+                    }
                 }
-            }
-
-            if (partitions == null || partitions.size() < 1) {
-                throw new IllegalArgumentException("Unable to subscribe to the Kafka topic "
-                    + topic
-                    + " backing this data cache. Topic may not exist.");
+                if (partitions.isEmpty()) {
+                    throw new IllegalArgumentException("Unable to subscribe to the Kafka topic "
+                        + topic
+                        + " backing this data cache. Topic may not exist.");
+                }
             }
 
             List<TopicPartition> topicPartitions = partitions.stream()
-                .peek(p -> offsetsInTopic.put(p.partition(), -1L))
-                .map(p -> new TopicPartition(topic, p.partition()))
+                .peek(p -> offsetsInTopic.put(p, -1L))
+                .map(p -> new TopicPartition(topic, p))
                 .collect(Collectors.toList());
             consumer.assign(topicPartitions);
 
@@ -777,13 +786,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         log.info("Seeking to checkpoint {} for {}", checkpoint, topicPartition);
                         consumer.seek(topicPartition, checkpoint);
                     } else {
-                        log.info("Seeking to beginning for {}", topicPartition);
-                        consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                        log.info("Seeking to start for {}", topicPartition);
+                        seekToStart(Collections.singletonList(topicPartition));
                     }
                 }
             } else {
-                log.info("Seeking to beginning for all partitions for topic {}", topic);
-                consumer.seekToBeginning(topicPartitions);
+                log.info("Seeking to start for all partitions for topic {}", topic);
+                seekToStart(topicPartitions);
             }
 
             log.info("Initialized last consumed offset to {}", offsetsInTopic);
@@ -806,12 +815,42 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         localCache.destroy();
                         localCache.init();
                     }
-                    log.warn("Seeking to beginning due to invalid offset", e);
-                    consumer.seekToBeginning(assignment);
+                    log.warn("Seeking to start due to invalid offset", e);
+                    seekToStart(assignment);
                     count = 0;
                 }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);
+        }
+
+        private void seekToStart(Collection<TopicPartition> topicPartitions) {
+            switch (offset.getOffsetType()) {
+                case BEGINNING:
+                    consumer.seekToBeginning(topicPartitions);
+                    break;
+                case END:
+                    consumer.seekToEnd(topicPartitions);
+                    break;
+                case ABSOLUTE:
+                    for (TopicPartition tp : topicPartitions) {
+                        consumer.seek(tp, offset.getOffset());
+                    }
+                    break;
+                case RELATIVE:
+                    Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions);
+                    for (TopicPartition tp : topicPartitions) {
+                        consumer.seek(tp, endOffsets.get(tp) + offset.getOffset());
+                    }
+                    break;
+                case TIMESTAMP:
+                    Map<TopicPartition, Long> timestamps = topicPartitions.stream()
+                        .collect(Collectors.toMap(tp -> tp, tp -> offset.getOffset()));
+                    Map<TopicPartition, OffsetAndTimestamp> offsets = consumer.offsetsForTimes(timestamps);
+                    for (TopicPartition tp : topicPartitions) {
+                        consumer.seek(tp, offsets.get(tp).offset());
+                    }
+                    break;
+            }
         }
 
         private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets) {
@@ -865,7 +904,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         TimestampType tsType = record.timestampType();
                         ValidationStatus status =
                             cacheUpdateHandler.validateUpdate(headers, messageKey, message,
-                                tp, offset, timestamp, tsType);
+                                tp, offset, timestamp, tsType, record.leaderEpoch());
                         V oldMessage = null;
                         switch (status) {
                             case SUCCESS:
@@ -878,7 +917,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     }
                                 }
                                 cacheUpdateHandler.handleUpdate(headers, messageKey, message, oldMessage,
-                                    tp, offset, timestamp, tsType);
+                                    tp, offset, timestamp, tsType, record.leaderEpoch());
                                 break;
                             case ROLLBACK_FAILURE:
                                 if (readOnly || messageKey == null) {

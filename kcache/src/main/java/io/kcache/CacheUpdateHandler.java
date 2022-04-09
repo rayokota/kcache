@@ -17,6 +17,7 @@
 package io.kcache;
 
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
@@ -71,10 +72,12 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param offset offset
      * @param ts timestamp
      * @param tsType timestamp type
+     * @param leaderEpoch leader epoch
      * @return whether the update should proceed
      */
     default ValidationStatus validateUpdate(Headers headers, K key, V value, TopicPartition tp,
-                                            long offset, long ts, TimestampType tsType) {
+                                            long offset, long ts, TimestampType tsType,
+                                            Optional<Integer> leaderEpoch) {
         return validateUpdate(key, value, tp, offset, ts);
     }
 
@@ -101,9 +104,11 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param offset offset
      * @param ts timestamp
      * @param tsType timestamp type
+     * @param leaderEpoch leader epoch
      */
     default void handleUpdate(Headers headers, K key, V value, V oldValue, TopicPartition tp,
-                              long offset, long ts, TimestampType tsType) {
+                              long offset, long ts, TimestampType tsType,
+                              Optional<Integer> leaderEpoch) {
         handleUpdate(key, value, oldValue, tp, offset, ts);
     }
 

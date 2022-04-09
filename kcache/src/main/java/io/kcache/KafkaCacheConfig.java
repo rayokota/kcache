@@ -19,6 +19,8 @@ package io.kcache;
 import io.kcache.utils.EnumRecommender;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -69,6 +71,15 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG = "kafkacache.topic.num.partitions";
     public static final int DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS = 1;
+    /**
+     * <code>kafkacache.topic.partitions</code>
+     */
+    public static final String KAFKACACHE_TOPIC_PARTITIONS_CONFIG = "kafkacache.topic.partitions";
+    /**
+     * <code>kafkacache.topic.partition.offset</code>
+     */
+    public static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG = "kafkacache.topic.partitions.offset";
+    public static final String DEFAULT_KAFKACACHE_TOPIC_PARTITIONS_OFFSET = "beginning";
     /**
      * <code>kafkacache.topic.skip.validation</code>
      */
@@ -174,6 +185,13 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "will be the smaller of this value and the number of live Kafka brokers.";
     protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
         "The desired number of partitions factor for the topic.";
+    protected static final String KAFKACACHE_TOPIC_PARTITIONS_DOC =
+        "A list of partitions to consume, or empty (the default) for all partitions.";
+    protected static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_DOC =
+        "The offset to start consuming all partitions from, one of \"beginning\", \"end\", "
+            + "a positive number representing an absolute offset, "
+            + "a negative number representing a relative offset from the end, "
+            + "or \"@<value>\", where value is timestamp in ms to start.";
     protected static final String KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC =
         "Whether to skip topic validation.";
     protected static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC =
@@ -271,6 +289,13 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, ConfigDef.Type.INT,
                 DEFAULT_KAFKACACHE_TOPIC_NUM_PARTITIONS,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC
+            )
+            .define(KAFKACACHE_TOPIC_PARTITIONS_CONFIG, ConfigDef.Type.LIST, "",
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_PARTITIONS_DOC
+            )
+            .define(KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG, ConfigDef.Type.STRING,
+                DEFAULT_KAFKACACHE_TOPIC_PARTITIONS_OFFSET,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_PARTITIONS_OFFSET_DOC
             )
             .define(KAFKACACHE_TOPIC_SKIP_VALIDATION_CONFIG, ConfigDef.Type.BOOLEAN, false,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC
@@ -453,6 +478,37 @@ public class KafkaCacheConfig extends AbstractConfig {
         return sb.toString();
     }
 
+    public List<Integer> partitions() {
+        List<String> prop = getList(KAFKACACHE_TOPIC_PARTITIONS_CONFIG);
+        try {
+            return prop.stream()
+                .map(Integer::parseInt)
+                .collect(Collectors.toList());
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Couldn't parse partitions: " + prop, e);
+        }
+    }
+
+    public Offset offset() {
+        String prop = getString(KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG);
+        try {
+            if (prop.equals("beginning")) {
+                return new Offset(OffsetType.BEGINNING, 0);
+            } else if (prop.equals("end")) {
+                return new Offset(OffsetType.END, 0);
+            } else if (prop.startsWith("@")) {
+                return new Offset(OffsetType.TIMESTAMP, Long.parseLong(prop.substring(1)));
+            } else {
+                long offset = Long.parseLong(prop);
+                return offset >= 0
+                    ? new Offset(OffsetType.ABSOLUTE, offset)
+                    : new Offset(OffsetType.RELATIVE, offset);
+            }
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Couldn't parse offset: " + prop, e);
+        }
+    }
+
     public static Properties getPropsFromFile(String propsFile) throws ConfigException {
         Properties props = new Properties();
         if (propsFile == null) {
@@ -471,6 +527,57 @@ public class KafkaCacheConfig extends AbstractConfig {
             return InetAddress.getLocalHost().getCanonicalHostName();
         } catch (UnknownHostException e) {
             throw new ConfigException("Unknown local hostname", e);
+        }
+    }
+
+    public enum OffsetType {
+        BEGINNING,
+        END,
+        ABSOLUTE,
+        RELATIVE,
+        TIMESTAMP
+    }
+
+    public static class Offset {
+        private final OffsetType offsetType;
+        private final long offset;
+
+        public Offset(OffsetType offsetType, long offset) {
+            this.offsetType = offsetType;
+            this.offset = offset;
+        }
+
+        public OffsetType getOffsetType() {
+            return offsetType;
+        }
+
+        public long getOffset() {
+            return offset;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            Offset offset1 = (Offset) o;
+            return offset == offset1.offset && offsetType == offset1.offsetType;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(offsetType, offset);
+        }
+
+        @Override
+        public String toString() {
+            return "Offset{" +
+                "offsetType=" + offsetType +
+                ", offset=" + offset +
+                '}';
         }
     }
 }

@@ -55,6 +55,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -857,11 +858,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             log.error("Failed to deserialize a value", e);
                             continue;
                         }
+                        Headers headers = record.headers();
                         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
                         long offset = record.offset();
                         long timestamp = record.timestamp();
+                        TimestampType tsType = record.timestampType();
                         ValidationStatus status =
-                            cacheUpdateHandler.validateUpdate(messageKey, message, tp, offset, timestamp);
+                            cacheUpdateHandler.validateUpdate(headers, messageKey, message,
+                                tp, offset, timestamp, tsType);
                         V oldMessage = null;
                         switch (status) {
                             case SUCCESS:
@@ -873,7 +877,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                         oldMessage = localCache.put(messageKey, message);
                                     }
                                 }
-                                cacheUpdateHandler.handleUpdate(messageKey, message, oldMessage, tp, offset, timestamp);
+                                cacheUpdateHandler.handleUpdate(headers, messageKey, message, oldMessage,
+                                    tp, offset, timestamp, tsType);
                                 break;
                             case ROLLBACK_FAILURE:
                                 if (readOnly || messageKey == null) {
@@ -888,9 +893,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                             null,
                                             record.key(),
                                             oldMessage == null ? null
-                                                : valueSerde.serializer()
-                                                    .serialize(topic, record.headers(), oldMessage),
-                                            record.headers()
+                                                : valueSerde.serializer().serialize(topic, headers, oldMessage),
+                                            headers
                                         );
                                         producer.send(producerRecord);
                                         log.warn("Rollback invalid update to key {}", messageKey);

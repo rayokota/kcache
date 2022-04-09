@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
 import java.io.IOException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.record.TimestampType;
 
 public interface CacheUpdateHandler<K, V> extends Closeable {
 
@@ -52,11 +54,28 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param value data written to the cache
      * @param tp topic-partition
      * @param offset offset
-     * @param timestamp timestamp
+     * @param ts timestamp
      * @return whether the update should proceed
      */
-    default ValidationStatus validateUpdate(K key, V value, TopicPartition tp, long offset, long timestamp) {
+    default ValidationStatus validateUpdate(K key, V value, TopicPartition tp, long offset, long ts) {
         return ValidationStatus.SUCCESS;
+    }
+
+    /**
+     * Invoked before every new K,V pair written to the cache
+     *
+     * @param headers headers
+     * @param key   key associated with the data
+     * @param value data written to the cache
+     * @param tp topic-partition
+     * @param offset offset
+     * @param ts timestamp
+     * @param tsType timestamp type
+     * @return whether the update should proceed
+     */
+    default ValidationStatus validateUpdate(Headers headers, K key, V value, TopicPartition tp,
+                                            long offset, long ts, TimestampType tsType) {
+        return validateUpdate(key, value, tp, offset, ts);
     }
 
     /**
@@ -67,9 +86,26 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * @param oldValue the previous value associated with key, or null if there was no mapping for key
      * @param tp topic-partition
      * @param offset offset
-     * @param timestamp timestamp
+     * @param ts timestamp
      */
-    void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long timestamp);
+    void handleUpdate(K key, V value, V oldValue, TopicPartition tp, long offset, long ts);
+
+    /**
+     * Invoked after every new K,V pair written to the cache
+     *
+     * @param headers headers
+     * @param key   key associated with the data
+     * @param value data written to the cache
+     * @param oldValue the previous value associated with key, or null if there was no mapping for key
+     * @param tp topic-partition
+     * @param offset offset
+     * @param ts timestamp
+     * @param tsType timestamp type
+     */
+    default void handleUpdate(Headers headers, K key, V value, V oldValue, TopicPartition tp,
+                              long offset, long ts, TimestampType tsType) {
+        handleUpdate(key, value, oldValue, tp, offset, ts);
+    }
 
     /**
      * Retrieve the offsets to checkpoint.

@@ -502,7 +502,7 @@ public class KafkaCacheConfig extends AbstractConfig {
                 long offset = Long.parseLong(prop);
                 return offset >= 0
                     ? new Offset(OffsetType.ABSOLUTE, offset)
-                    : new Offset(OffsetType.RELATIVE, offset);
+                    : new Offset(OffsetType.RELATIVE, -offset);
             }
         } catch (NumberFormatException e) {
             throw new ConfigException("Couldn't parse offset: " + prop, e);

@@ -839,7 +839,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 case RELATIVE:
                     Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions, timeout);
                     for (TopicPartition tp : topicPartitions) {
-                        consumer.seek(tp, Math.max(endOffsets.get(tp) + offset.getOffset(), 0));
+                        consumer.seek(tp, Math.max(endOffsets.get(tp) - offset.getOffset(), 0));
                     }
                     break;
                 case TIMESTAMP:

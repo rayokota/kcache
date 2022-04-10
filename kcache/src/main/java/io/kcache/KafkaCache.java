@@ -857,7 +857,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             consumer.seek(tp, offsets.get(tp).offset());
                         } else {
                             consumer.seekToBeginning(Collections.singleton(tp));
-                            log.warn("Could not find offset for partition {}, timestamp {}, "
+                            log.warn("Could not find offset time for partition {}, timestamp {}, "
                                 + "seeking to beginning", tp.partition(), offset.getOffset());
                         }
                     }

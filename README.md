@@ -70,7 +70,7 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.topic.partitions.offset` - The offset to start consuming all partitions from, one of `beginning`, `end`, 
    a positive number representing an absolute offset, a negative number representing a relative offset from the end, 
-   or `@<value>`, where `<value>` is a timestamp in ms.
+   or `@<value>`, where `<value>` is a timestamp in ms.  Defaults to `beginning`.
 - `kafkacache.init.timeout.ms` - The timeout for initialization of the Kafka cache, including creation of the compacted topic.  Defaults to 300 seconds.
 - `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
 - `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `caffeine`, `lmdb`, `mapdb`, `rdbms`, or `rocksdb`.

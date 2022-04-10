@@ -188,8 +188,8 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_DOC =
         "A list of partitions to consume, or empty (the default) for all partitions.";
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_DOC =
-        "The offset to start consuming all partitions from, one of \"beginning\", \"end\", "
-            + "a positive number representing an absolute offset, "
+        "The offset to start consuming all partitions from, one of \"beginning\" (the default), "
+            + "\"end\", a positive number representing an absolute offset, "
             + "a negative number representing a relative offset from the end, "
             + "or \"@<value>\", where \"<value>\" is a timestamp in ms.";
     protected static final String KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC =

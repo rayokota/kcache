@@ -802,8 +802,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         private void readToEndOffsets(Duration timeout) throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
-            Map<TopicPartition, Long> endOffsets =
-                consumer.endOffsets(assignment, timeout);
+            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment, timeout);
             log.info("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
@@ -840,7 +839,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 case RELATIVE:
                     Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions, timeout);
                     for (TopicPartition tp : topicPartitions) {
-                        consumer.seek(tp, endOffsets.get(tp) + offset.getOffset());
+                        consumer.seek(tp, Math.max(endOffsets.get(tp) + offset.getOffset(), 0));
                     }
                     break;
                 case TIMESTAMP:

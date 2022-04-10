@@ -284,7 +284,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // the thread must be created after the topic has been created.
         this.kafkaTopicReader = new WorkerThread();
         try {
-            this.kafkaTopicReader.readToEndOffsets();
+            this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
         } catch (IOException e) {
             throw new CacheInitializationException("Failed to read to end offsets", e);
         }
@@ -385,7 +385,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
-        Map topicConfigs = new HashMap(config.originalsWithPrefix("kafkacache.topic.config."));
+        Map<String, String> topicConfigs = new HashMap(config.originalsWithPrefix("kafkacache.topic.config."));
         topicConfigs.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_COMPACT
@@ -750,9 +750,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // Include a few retries since topic creation may take some time to propagate and
                 // cache is often started immediately after creating the topic.
                 int retries = 0;
-                List<PartitionInfo> partitionInfos = null;
+                List<PartitionInfo> partitionInfos;
                 while (retries++ < 10) {
-                    partitionInfos = consumer.partitionsFor(topic);
+                    partitionInfos = consumer.partitionsFor(topic, Duration.ofMillis(initTimeout));
                     if (partitionInfos != null && !partitionInfos.isEmpty()) {
                         partitions = partitionInfos.stream()
                             .map(PartitionInfo::partition)
@@ -787,12 +787,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         consumer.seek(topicPartition, checkpoint);
                     } else {
                         log.info("Seeking to start for {}", topicPartition);
-                        seekToStart(Collections.singletonList(topicPartition));
+                        seekToStart(Collections.singleton(topicPartition), Duration.ofMillis(initTimeout));
                     }
                 }
             } else {
                 log.info("Seeking to start for all partitions for topic {}", topic);
-                seekToStart(topicPartitions);
+                seekToStart(topicPartitions, Duration.ofMillis(initTimeout));
             }
 
             log.info("Initialized last consumed offset to {}", offsetsInTopic);
@@ -800,13 +800,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
 
-        private void readToEndOffsets() throws IOException {
+        private void readToEndOffsets(Duration timeout) throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
-            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
+            Map<TopicPartition, Long> endOffsets =
+                consumer.endOffsets(assignment, timeout);
             log.info("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
-            while (!hasReadToEndOffsets(endOffsets)) {
+            while (!hasReadToEndOffsets(endOffsets, timeout)) {
                 try {
                     count += poll();
                 } catch (InvalidOffsetException e) {
@@ -816,14 +817,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         localCache.init();
                     }
                     log.warn("Seeking to start due to invalid offset", e);
-                    seekToStart(assignment);
+                    seekToStart(assignment, timeout);
                     count = 0;
                 }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);
         }
 
-        private void seekToStart(Collection<TopicPartition> topicPartitions) {
+        private void seekToStart(Collection<TopicPartition> topicPartitions, Duration timeout) {
             switch (offset.getOffsetType()) {
                 case BEGINNING:
                     consumer.seekToBeginning(topicPartitions);
@@ -837,7 +838,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                     break;
                 case RELATIVE:
-                    Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions);
+                    Map<TopicPartition, Long> endOffsets = consumer.endOffsets(topicPartitions, timeout);
                     for (TopicPartition tp : topicPartitions) {
                         consumer.seek(tp, endOffsets.get(tp) + offset.getOffset());
                     }
@@ -845,16 +846,28 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 case TIMESTAMP:
                     Map<TopicPartition, Long> timestamps = topicPartitions.stream()
                         .collect(Collectors.toMap(tp -> tp, tp -> offset.getOffset()));
-                    Map<TopicPartition, OffsetAndTimestamp> offsets = consumer.offsetsForTimes(timestamps);
+                    Map<TopicPartition, OffsetAndTimestamp> offsets = null;
+                    try {
+                        offsets = consumer.offsetsForTimes(timestamps, timeout);
+                    } catch (KafkaException e) {
+                        log.warn("Could not fetch offset times", e);
+                    }
                     for (TopicPartition tp : topicPartitions) {
-                        consumer.seek(tp, offsets.get(tp).offset());
+                        if (offsets != null && offsets.get(tp) != null) {
+                            consumer.seek(tp, offsets.get(tp).offset());
+                        } else {
+                            consumer.seekToBeginning(Collections.singleton(tp));
+                            log.warn("Could not find offset for partition {}, timestamp {}, "
+                                + "seeking to beginning", tp.partition(), offset.getOffset());
+                        }
                     }
                     break;
             }
         }
 
-        private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets) {
-            endOffsets.entrySet().removeIf(entry -> consumer.position(entry.getKey()) >= entry.getValue());
+        private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets, Duration timeout) {
+            endOffsets.entrySet().removeIf(entry ->
+                consumer.position(entry.getKey(), timeout) >= entry.getValue());
             return endOffsets.isEmpty();
         }
 
@@ -1038,7 +1051,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             try {
                 consumerLock.lock();
                 try {
-                    readToEndOffsets();
+                    readToEndOffsets(Duration.ofMillis(timeout));
                 } catch (Exception e) {
                     log.warn("Could not read to end offsets", e);
                 }

@@ -24,8 +24,8 @@ import org.mapdb.serializer.SerializerByteArray;
 
 public class CustomSerializerByteArray<K> extends SerializerByteArray {
 
-    private Serde<K> keySerde;
-    private Comparator<? super K> comparator;
+    private final Serde<K> keySerde;
+    private final Comparator<? super K> comparator;
 
     public CustomSerializerByteArray(Serde<K> keySerde, Comparator<? super K> comparator) {
         this.keySerde = keySerde;

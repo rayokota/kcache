@@ -264,7 +264,7 @@ public class KeyValueIterators {
 
     private static class SingletonKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private boolean beforeFirst;
-        private KeyValue<K, V> keyValue;
+        private final KeyValue<K, V> keyValue;
 
         public SingletonKeyValueIterator(KeyValue<K, V> keyValue) {
             this.beforeFirst = true;

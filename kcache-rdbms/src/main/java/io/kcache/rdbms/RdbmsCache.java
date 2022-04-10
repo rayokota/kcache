@@ -28,7 +28,6 @@ import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.rdbms.jooq.Kcache;
 import io.kcache.rdbms.jooq.tables.records.KvRecord;
 import io.kcache.utils.PersistentCache;
-import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;

@@ -26,8 +26,8 @@ import org.apache.kafka.common.serialization.Serde;
 public class KeyBufferComparator<K> implements Comparator<ByteBuffer>, Serializable {
     private static final long serialVersionUID = 7847770324097153442L;
 
-    private Serde<K> keySerde;
-    private Comparator<? super K> keyComparator;
+    private final Serde<K> keySerde;
+    private final Comparator<? super K> keyComparator;
 
     public KeyBufferComparator(Serde<K> keySerde, Comparator<? super K> keyComparator) {
         this.keySerde = keySerde;

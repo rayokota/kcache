@@ -58,7 +58,6 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
         this.cache = createCache(maximumSize, expireAfterWrite);
     }
 
-    @SuppressWarnings("unchecked")
     private com.google.common.cache.Cache<K, V> createCache(
         Integer maximumSize, Duration expireAfterWrite
     ) {
@@ -121,6 +120,7 @@ public class InMemoryBoundedCache<K, V> extends InMemoryCache<K, V> {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public V remove(final Object key) {
         if (key != null) {
             cache.invalidate((K) key);

@@ -18,7 +18,6 @@ package io.kcache.rdbms;
 
 import io.kcache.Cache;
 import io.kcache.PersistentCacheTest;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serdes;

@@ -114,9 +114,7 @@ public class Caches {
         }
 
         public void putAll(Map<? extends K, ? extends V> map) {
-            for (Map.Entry<? extends K, ? extends V> entry : map.entrySet()) {
-                m.put(entry.getKey(), entry.getValue());
-            }
+            m.putAll(map);
         }
 
         public void clear() {

@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import org.apache.kafka.common.serialization.Serde;
 import org.rocksdb.AbstractComparator;
 import org.rocksdb.ComparatorOptions;
-import org.rocksdb.Slice;
 
 import java.util.Comparator;
 

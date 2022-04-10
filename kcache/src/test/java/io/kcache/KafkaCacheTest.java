@@ -183,7 +183,6 @@ public class KafkaCacheTest extends ClusterTestHarness {
             // recreate kafka store
             kafkaCache = createAndInitKafkaCacheInstance();
             // verify that key still doesn't exist in the store
-            retrievedValue = value;
             try {
                 retrievedValue = kafkaCache.get(key);
             } catch (CacheException e) {
@@ -192,90 +191,6 @@ public class KafkaCacheTest extends ClusterTestHarness {
             assertNull("Value should have been deleted", retrievedValue);
         } finally {
             kafkaCache.close();
-        }
-    }
-
-    @Test
-    public void testDifferentOffsetAfterRestart() throws Exception {
-        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
-            try {
-                kafkaCache.put("Kafka", "Rocks");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
-            }
-            try {
-                kafkaCache.put("Kafka2", "Rocks2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store put(Kafka2, Rocks2) operation failed", e);
-            }
-        }
-        Properties kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "end");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
-            String retrievedValue;
-            try {
-                retrievedValue = kafkaCache.get("Kafka");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-            }
-            assertNull("Value should have been deleted", retrievedValue);
-            try {
-                retrievedValue = kafkaCache.get("Kafka2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
-            }
-            assertNull("Value should have been deleted", retrievedValue);
-        }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "1");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
-            String retrievedValue;
-            try {
-                retrievedValue = kafkaCache.get("Kafka");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-            }
-            assertNull("Value should have been deleted", retrievedValue);
-            try {
-                retrievedValue = kafkaCache.get("Kafka2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
-            }
-            assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
-        }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "-1");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
-            String retrievedValue;
-            try {
-                retrievedValue = kafkaCache.get("Kafka");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-            }
-            assertNull("Value should have been deleted", retrievedValue);
-            try {
-                retrievedValue = kafkaCache.get("Kafka2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
-            }
-            assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
-        }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "@0");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
-            String retrievedValue;
-            try {
-                retrievedValue = kafkaCache.get("Kafka");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-            }
-            assertEquals("Retrieved value should match entered value", "Rocks", retrievedValue);
-            try {
-                retrievedValue = kafkaCache.get("Kafka2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
-            }
-            assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
         }
     }
 

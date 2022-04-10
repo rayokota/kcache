@@ -57,7 +57,7 @@ import java.util.regex.Pattern;
  *   separated by spaces.
  */
 public class OffsetCheckpoint implements Closeable {
-    private static final Logger LOG = LoggerFactory.getLogger(OffsetCheckpoint.class);
+    private static final Logger log = LoggerFactory.getLogger(OffsetCheckpoint.class);
 
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
@@ -69,7 +69,7 @@ public class OffsetCheckpoint implements Closeable {
     private final Object lock;
     private FileChannel channel;
     private FileLock fileLock;
-    private int version;
+    private final int version;
 
     public OffsetCheckpoint(String checkpointDir, int version, String topic) throws IOException {
         File baseDir = baseDir(checkpointDir, topic);
@@ -125,7 +125,7 @@ public class OffsetCheckpoint implements Closeable {
         synchronized (lock) {
             // write to temp file and then swap with the existing file
             final File temp = new File(file.getAbsolutePath() + ".tmp");
-            LOG.trace("Writing tmp checkpoint file {}", temp.getAbsolutePath());
+            log.trace("Writing tmp checkpoint file {}", temp.getAbsolutePath());
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
             try (final BufferedWriter writer = new BufferedWriter(
@@ -139,7 +139,7 @@ public class OffsetCheckpoint implements Closeable {
                     if (offset >= 0L) {
                         writeEntry(writer, tp, offset);
                     } else {
-                        LOG.warn("Received offset={} to write to checkpoint file for {}", offset, tp);
+                        log.warn("Received offset={} to write to checkpoint file for {}", offset, tp);
                     }
                 }
 
@@ -147,7 +147,7 @@ public class OffsetCheckpoint implements Closeable {
                 fileOutputStream.getFD().sync();
             }
 
-            LOG.trace("Swapping tmp checkpoint file {} {}", temp.toPath(), file.toPath());
+            log.trace("Swapping tmp checkpoint file {} {}", temp.toPath(), file.toPath());
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }
@@ -207,7 +207,7 @@ public class OffsetCheckpoint implements Closeable {
                         if (offset >= 0L) {
                             offsets.put(tp, offset);
                         } else {
-                            LOG.warn("Read offset={} from checkpoint file for {}", offset, tp);
+                            log.warn("Read offset={} from checkpoint file for {}", offset, tp);
                         }
 
                         line = reader.readLine();
@@ -219,7 +219,7 @@ public class OffsetCheckpoint implements Closeable {
                     }
                     return offsets;
                 } else {
-                    LOG.warn("Old offset checkpoint version: " + oldVersion);
+                    log.warn("Old offset checkpoint version: " + oldVersion);
                 }
             } catch (final NoSuchFileException e) {
                 // ignore

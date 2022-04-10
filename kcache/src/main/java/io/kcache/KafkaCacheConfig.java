@@ -490,23 +490,7 @@ public class KafkaCacheConfig extends AbstractConfig {
     }
 
     public Offset offset() {
-        String prop = getString(KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG);
-        try {
-            if (prop.equals("beginning")) {
-                return new Offset(OffsetType.BEGINNING, 0);
-            } else if (prop.equals("end")) {
-                return new Offset(OffsetType.END, 0);
-            } else if (prop.startsWith("@")) {
-                return new Offset(OffsetType.TIMESTAMP, Long.parseLong(prop.substring(1)));
-            } else {
-                long offset = Long.parseLong(prop);
-                return offset >= 0
-                    ? new Offset(OffsetType.ABSOLUTE, offset)
-                    : new Offset(OffsetType.RELATIVE, -offset);
-            }
-        } catch (NumberFormatException e) {
-            throw new ConfigException("Couldn't parse offset: " + prop, e);
-        }
+        return new Offset(getString(KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG));
     }
 
     public static Properties getPropsFromFile(String propsFile) throws ConfigException {
@@ -541,6 +525,32 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static class Offset {
         private final OffsetType offsetType;
         private final long offset;
+
+        public Offset(String value) {
+            try {
+                if (value.equals("beginning")) {
+                    this.offsetType = OffsetType.BEGINNING;
+                    this.offset = 0;
+                } else if (value.equals("end")) {
+                    this.offsetType = OffsetType.END;
+                    this.offset = 0;
+                } else if (value.startsWith("@")) {
+                    this.offsetType = OffsetType.TIMESTAMP;
+                    this.offset = Long.parseLong(value.substring(1));
+                } else {
+                    long offset = Long.parseLong(value);
+                    if (offset >= 0) {
+                        this.offsetType = OffsetType.ABSOLUTE;
+                        this.offset = offset;
+                    } else {
+                        this.offsetType = OffsetType.RELATIVE;
+                        this.offset = -offset;
+                    }
+                }
+            } catch (NumberFormatException e) {
+                throw new ConfigException("Couldn't parse offset: " + value, e);
+            }
+        }
 
         public Offset(OffsetType offsetType, long offset) {
             this.offsetType = offsetType;

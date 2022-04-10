@@ -186,7 +186,7 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
         "The desired number of partitions factor for the topic.";
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_DOC =
-        "A list of partitions to consume, or empty (the default) for all partitions.";
+        "A list of partitions to consume, or all partitions if not specified.";
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_DOC =
         "The offset to start consuming all partitions from, one of \"beginning\" (the default), "
             + "\"end\", a positive number representing an absolute offset, "

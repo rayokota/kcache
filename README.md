@@ -68,6 +68,7 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.client.id` - The client ID to use for the internal consumer.  Defaults to `kafka-cache-reader-<topic>`.
 - `kafkacache.topic` - The name of the compacted topic.  Defaults to `_cache`.
 - `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
+- `kafkacache.topic.partitions` - A list of partitions to consume, or all partitions if not specified.
 - `kafkacache.topic.partitions.offset` - The offset to start consuming all partitions from, one of `beginning`, `end`, 
    a positive number representing an absolute offset, a negative number representing a relative offset from the end, 
    or `@<value>`, where `<value>` is a timestamp in ms.  Defaults to `beginning`.

@@ -584,10 +584,20 @@ public class KafkaCacheConfig extends AbstractConfig {
 
         @Override
         public String toString() {
-            return "Offset{" +
-                "offsetType=" + offsetType +
-                ", offset=" + offset +
-                '}';
+            switch (offsetType) {
+                case BEGINNING:
+                    return "beginning";
+                case END:
+                    return "end";
+                case ABSOLUTE:
+                    return String.valueOf(offset);
+                case RELATIVE:
+                    return String.valueOf(-offset);
+                case TIMESTAMP:
+                    return "@" + offset;
+                default:
+                    throw new IllegalStateException("Invalid offsetType: " + offsetType);
+            }
         }
     }
 }

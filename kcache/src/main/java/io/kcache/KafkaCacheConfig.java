@@ -191,7 +191,7 @@ public class KafkaCacheConfig extends AbstractConfig {
         "The offset to start consuming all partitions from, one of \"beginning\", \"end\", "
             + "a positive number representing an absolute offset, "
             + "a negative number representing a relative offset from the end, "
-            + "or \"@<value>\", where \"value\" is a timestamp in ms.";
+            + "or \"@<value>\", where \"<value>\" is a timestamp in ms.";
     protected static final String KAFKACACHE_TOPIC_SKIP_VALIDATION_DOC =
         "Whether to skip topic validation.";
     protected static final String KAFKACACHE_TOPIC_REQUIRE_COMPACT_DOC =

@@ -26,7 +26,7 @@ public class KafkaMapDBCacheTest extends KafkaPersistentCacheTest {
     @Override
     protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MAPDB.name().toLowerCase());
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MAPDB.toString());
         return props;
     }
 }

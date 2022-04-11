@@ -95,7 +95,7 @@ public class KafkaCaffeineCacheTest extends KafkaCacheTest {
     @Override
     protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.CAFFEINE.name().toLowerCase());
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.CAFFEINE.toString());
         props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, 1);
         return props;
     }

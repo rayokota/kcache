@@ -235,8 +235,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 cache = ctor.newInstance(maxSize, Duration.ofSeconds(expiry), null, cmp);
             }
             Map<String, ?> configs = config.originalsWithPrefix(
-                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
-                    + cacheType.name().toLowerCase(Locale.ROOT) + ".");
+                KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "." + cacheType + ".");
             cache.configure(configs);
             return cache;
         } catch (Exception e) {

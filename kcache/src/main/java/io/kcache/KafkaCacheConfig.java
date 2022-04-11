@@ -19,7 +19,10 @@ package io.kcache;
 import io.kcache.utils.EnumRecommender;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -79,7 +82,7 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.topic.partition.offset</code>
      */
     public static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG = "kafkacache.topic.partitions.offset";
-    public static final String DEFAULT_KAFKACACHE_TOPIC_PARTITIONS_OFFSET = "beginning";
+    public static final String DEFAULT_KAFKACACHE_TOPIC_PARTITIONS_OFFSET = OffsetType.BEGINNING.toString();
     /**
      * <code>kafkacache.topic.skip.validation</code>
      */
@@ -313,8 +316,8 @@ public class KafkaCacheConfig extends AbstractConfig {
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TIMEOUT_DOC
             )
             .define(KAFKACACHE_BACKING_CACHE_CONFIG, ConfigDef.Type.STRING,
-                CacheType.MEMORY.name().toLowerCase(Locale.ROOT),
-                new EnumRecommender<>(CacheType.class, e -> e.toLowerCase(Locale.ROOT)),
+                CacheType.MEMORY.toString(),
+                new EnumRecommender<>(CacheType.class, e -> e),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_BACKING_CACHE_DOC
             )
             .define(KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, ConfigDef.Type.INT, -1,
@@ -519,7 +522,24 @@ public class KafkaCacheConfig extends AbstractConfig {
         END,
         ABSOLUTE,
         RELATIVE,
-        TIMESTAMP
+        TIMESTAMP;
+
+        private static final Map<String, OffsetType> lookup = new HashMap<>();
+
+        static {
+            for (OffsetType v : EnumSet.allOf(OffsetType.class)) {
+                lookup.put(v.toString(), v);
+            }
+        }
+
+        public static OffsetType get(String name) {
+            return lookup.get(name.toLowerCase(Locale.ROOT));
+        }
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
     }
 
     public static class Offset {
@@ -528,10 +548,10 @@ public class KafkaCacheConfig extends AbstractConfig {
 
         public Offset(String value) {
             try {
-                if (value.equals("beginning")) {
+                if (value.equalsIgnoreCase(OffsetType.BEGINNING.toString())) {
                     this.offsetType = OffsetType.BEGINNING;
                     this.offset = 0;
-                } else if (value.equals("end")) {
+                } else if (value.equalsIgnoreCase(OffsetType.END.toString())) {
                     this.offsetType = OffsetType.END;
                     this.offset = 0;
                 } else if (value.startsWith("@")) {
@@ -586,9 +606,9 @@ public class KafkaCacheConfig extends AbstractConfig {
         public String toString() {
             switch (offsetType) {
                 case BEGINNING:
-                    return "beginning";
+                    return offsetType.toString();
                 case END:
-                    return "end";
+                    return offsetType.toString();
                 case ABSOLUTE:
                     return String.valueOf(offset);
                 case RELATIVE:

@@ -26,7 +26,7 @@ public class KafkaRocksDBCacheTest extends KafkaPersistentCacheTest {
     @Override
     protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
-        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.ROCKSDB.name().toLowerCase());
+        props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.ROCKSDB.toString());
         return props;
     }
 }

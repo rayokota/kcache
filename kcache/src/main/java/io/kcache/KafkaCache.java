@@ -29,6 +29,7 @@ import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -913,9 +914,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         long offset = record.offset();
                         long timestamp = record.timestamp();
                         TimestampType tsType = record.timestampType();
+                        Optional<Integer> leaderEpoch = record.leaderEpoch();
                         ValidationStatus status =
                             cacheUpdateHandler.validateUpdate(headers, messageKey, message,
-                                tp, offset, timestamp, tsType, record.leaderEpoch());
+                                tp, offset, timestamp, tsType, leaderEpoch);
                         V oldMessage = null;
                         switch (status) {
                             case SUCCESS:
@@ -928,7 +930,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                     }
                                 }
                                 cacheUpdateHandler.handleUpdate(headers, messageKey, message, oldMessage,
-                                    tp, offset, timestamp, tsType, record.leaderEpoch());
+                                    tp, offset, timestamp, tsType, leaderEpoch);
                                 break;
                             case ROLLBACK_FAILURE:
                                 if (readOnly || messageKey == null) {

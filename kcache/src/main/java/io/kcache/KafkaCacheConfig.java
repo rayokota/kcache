@@ -79,7 +79,7 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_TOPIC_PARTITIONS_CONFIG = "kafkacache.topic.partitions";
     /**
-     * <code>kafkacache.topic.partition.offset</code>
+     * <code>kafkacache.topic.partitions.offset</code>
      */
     public static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG = "kafkacache.topic.partitions.offset";
     public static final String DEFAULT_KAFKACACHE_TOPIC_PARTITIONS_OFFSET = OffsetType.BEGINNING.toString();

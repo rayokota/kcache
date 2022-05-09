@@ -94,7 +94,7 @@ cache.init();
 
 ## Security
 
-KCache supports both SSL authentication and SASL authentication to a secure Kafka cluster.  See the [JavaDoc](https://static.javadoc.io/io.kcache/kcache/2.0.2/io/kcache/KafkaCacheConfig.html) for more information.
+KCache supports both SSL authentication and SASL authentication to a secure Kafka cluster.  See the [JavaDoc](https://static.javadoc.io/io.kcache/kcache/latest/io/kcache/KafkaCacheConfig.html) for more information.
 
 ## Using KCache as a Replicated Cache
 

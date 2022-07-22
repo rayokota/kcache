@@ -1066,9 +1066,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 } finally {
                     offsetUpdateLock.unlock();
                 }
-            } else {
-                waitUntilConsumerEndOffsets(timeout);
+
+                if (hasReadToLastWrittenOffsets()) {
+                    return;
+                } else {
+                    log.warn("Could not read to last written offsets");
+                }
             }
+            waitUntilConsumerEndOffsets(timeout);
         }
 
         private boolean hasValidLastWrittenOffsets() {

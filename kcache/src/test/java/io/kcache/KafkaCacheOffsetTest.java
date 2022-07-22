@@ -32,8 +32,8 @@ public class KafkaCacheOffsetTest extends ClusterTestHarness {
 
     @Test
     public void testDifferentOffsetAfterRestart() throws Exception {
-        Properties kafkaCacheProps = getKafkaCacheProperties();
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+        Properties props = getKafkaCacheProperties();
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
             try {
                 kafkaCache.put("Kafka", "Rocks");
             } catch (CacheException e) {
@@ -45,9 +45,8 @@ public class KafkaCacheOffsetTest extends ClusterTestHarness {
                 throw new RuntimeException("Kafka store put(Kafka2, Rocks2) operation failed", e);
             }
         }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "end");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+        props.put("kafkacache.topic.partitions.offset", "end");
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
             String retrievedValue;
             try {
                 retrievedValue = kafkaCache.get("Kafka");
@@ -62,26 +61,8 @@ public class KafkaCacheOffsetTest extends ClusterTestHarness {
             }
             assertNull("Value should have been deleted", retrievedValue);
         }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "1");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
-            String retrievedValue;
-            try {
-                retrievedValue = kafkaCache.get("Kafka");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
-            }
-            assertNull("Value should have been deleted", retrievedValue);
-            try {
-                retrievedValue = kafkaCache.get("Kafka2");
-            } catch (CacheException e) {
-                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
-            }
-            assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
-        }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "-1");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+        props.put("kafkacache.topic.partitions.offset", "1");
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
             String retrievedValue;
             try {
                 retrievedValue = kafkaCache.get("Kafka");
@@ -96,9 +77,24 @@ public class KafkaCacheOffsetTest extends ClusterTestHarness {
             }
             assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
         }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "@0");
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+        props.put("kafkacache.topic.partitions.offset", "-1");
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
+            String retrievedValue;
+            try {
+                retrievedValue = kafkaCache.get("Kafka");
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertNull("Value should have been deleted", retrievedValue);
+            try {
+                retrievedValue = kafkaCache.get("Kafka2");
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka2) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
+        }
+        props.put("kafkacache.topic.partitions.offset", "@0");
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
             String retrievedValue;
             try {
                 retrievedValue = kafkaCache.get("Kafka");
@@ -113,10 +109,9 @@ public class KafkaCacheOffsetTest extends ClusterTestHarness {
             }
             assertEquals("Retrieved value should match entered value", "Rocks2", retrievedValue);
         }
-        kafkaCacheProps = getKafkaCacheProperties();
-        kafkaCacheProps.put("kafkacache.topic.partitions.offset", "@" + Long.MAX_VALUE);
+        props.put("kafkacache.topic.partitions.offset", "@" + Long.MAX_VALUE);
         // Max timestamp causes offsetsForTimes to fail, resulting in seeking to beginning
-        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(kafkaCacheProps)) {
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
             String retrievedValue;
             try {
                 retrievedValue = kafkaCache.get("Kafka");

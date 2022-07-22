@@ -80,7 +80,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testSimpleGetAfterFailure() throws Exception {
+    public void testSimpleGetAfterRestart() throws Exception {
         Properties props = getKafkaCacheProperties();
         Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
         String key = "Kafka";
@@ -149,8 +149,9 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     @Test
-    public void testDeleteAfterRestart() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
+    public void testSimpleDeleteAfterRestart() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
         String key = "Kafka";
         String value = "Rocks";
         try {
@@ -180,8 +181,8 @@ public class KafkaCacheTest extends ClusterTestHarness {
             }
             assertNull("Value should have been deleted", retrievedValue);
             kafkaCache.close();
-            // recreate kafka store
-            kafkaCache = createAndInitKafkaCacheInstance();
+            // recreate kafka store with same props
+            kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
             // verify that key still doesn't exist in the store
             try {
                 retrievedValue = kafkaCache.get(key);
@@ -244,7 +245,8 @@ public class KafkaCacheTest extends ClusterTestHarness {
 
     @Test
     public void testSyncAfterRestart() throws Exception {
-        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
+        Properties props = getKafkaCacheProperties();
+        Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
         String key = "Kafka";
         String value = "Rocks";
         try {
@@ -262,7 +264,7 @@ public class KafkaCacheTest extends ClusterTestHarness {
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
             kafkaCache.close();
             // recreate kafka store
-            kafkaCache = createAndInitKafkaCacheInstance();
+            kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
             kafkaCache.sync();
             try {
                 retrievedValue = kafkaCache.get(key);

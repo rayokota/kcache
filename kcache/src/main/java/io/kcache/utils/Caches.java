@@ -57,7 +57,7 @@ public class Caches {
             m.init();
         }
 
-        public void sync() {
+        public synchronized void sync() {
             m.sync();
         }
 

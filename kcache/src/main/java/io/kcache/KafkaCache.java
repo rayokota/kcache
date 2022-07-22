@@ -890,7 +890,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
-                cacheUpdateHandler.startBatch(records.count());
+                count = records.count();
+                cacheUpdateHandler.startBatch(count);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     try {
                         K messageKey;
@@ -972,13 +973,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (localCache.isPersistent() && initialized.get()) {
                     try {
                         localCache.flush();
-                        Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(records.count());
+                        Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(count);
                         checkpointOffsets(offsets);
                     } catch (CacheException e) {
                         log.warn("Failed to flush", e);
                     }
                 }
-                cacheUpdateHandler.endBatch(records.count());
+                cacheUpdateHandler.endBatch(count);
             } catch (WakeupException we) {
                 // do nothing
             } catch (RecordTooLargeException rtle) {

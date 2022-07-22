@@ -22,7 +22,6 @@ import java.net.UnknownHostException;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;

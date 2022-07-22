@@ -46,8 +46,8 @@ public class SASLClusterTestHarness extends ClusterTestHarness {
     public static final String ZK_AUTH_PROVIDER = "zookeeper.authProvider.1";
 
     private MiniKdc kdc = null;
-    private File kdcHome = TestUtils.tempDir();
-    private Properties kdcProps = MiniKdc.createConfig();
+    private final File kdcHome = TestUtils.tempDir();
+    private final Properties kdcProps = MiniKdc.createConfig();
 
     private static final Logger log = LoggerFactory.getLogger(SASLClusterTestHarness.class);
 

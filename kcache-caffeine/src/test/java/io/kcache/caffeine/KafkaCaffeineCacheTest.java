@@ -66,7 +66,7 @@ public class KafkaCaffeineCacheTest extends KafkaCacheTest {
     }
 
     public static class StringToMapUpdateHandler implements CacheUpdateHandler<String, String> {
-        public Map<String, String> map;
+        public final Map<String, String> map;
 
         public StringToMapUpdateHandler(Map<String, String> map) {
             this.map = map;
@@ -80,7 +80,7 @@ public class KafkaCaffeineCacheTest extends KafkaCacheTest {
     }
 
     public static class StringFromMapCacheLoader implements CacheLoader<String, String> {
-        public Map<String, String> map;
+        public final Map<String, String> map;
 
         public StringFromMapCacheLoader(Map<String, String> map) {
             this.map = map;

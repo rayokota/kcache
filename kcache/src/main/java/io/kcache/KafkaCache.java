@@ -27,7 +27,6 @@ import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.ShutdownableThread;
 import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -99,7 +98,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<K> keySerde;
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
-    private AtomicBoolean initialized = new AtomicBoolean(false);
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
     private boolean skipValidation;
     private boolean requireCompact;
     private boolean readOnly;
@@ -113,7 +112,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private WorkerThread kafkaTopicReader;
     private KafkaCacheConfig config;
     private OffsetCheckpoint checkpointFile;
-    private Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
+    private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
+    private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -302,7 +302,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     public void sync() {
         assertInitialized();
         localCache.sync();
-        kafkaTopicReader.waitUntilEndOffsets();
+        kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
@@ -531,6 +531,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             int lastWrittenPartition = recordMetadata.partition();
             long lastWrittenOffset = recordMetadata.offset();
             kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
+            lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
@@ -736,7 +737,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private final AtomicBoolean isRunning;
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
-        private final Map<Integer, Long> offsetsInTopic = new ConcurrentHashMap<>();
+        private final Map<Integer, Long> lastReadOffsets = new ConcurrentHashMap<>();
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);
@@ -774,7 +775,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
 
             List<TopicPartition> topicPartitions = partitions.stream()
-                .peek(p -> offsetsInTopic.put(p, -1L))
+                .peek(p -> lastReadOffsets.put(p, -1L))
                 .map(p -> new TopicPartition(topic, p))
                 .collect(Collectors.toList());
             consumer.assign(topicPartitions);
@@ -795,7 +796,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 seekToStart(topicPartitions, Duration.ofMillis(initTimeout));
             }
 
-            log.info("Initialized last consumed offset to {}", offsetsInTopic);
+            log.info("Initialized last read offsets to {}", lastReadOffsets);
 
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
@@ -994,7 +995,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private void updateOffset(int partition, long offset) {
             try {
                 offsetUpdateLock.lock();
-                offsetsInTopic.put(partition, offset);
+                lastReadOffsets.put(partition, offset);
                 offsetReachedThreshold.signalAll();
             } finally {
                 offsetUpdateLock.unlock();
@@ -1004,8 +1005,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private void checkpointOffsets(Map<TopicPartition, Long> offsets) {
             Map<TopicPartition, Long> newOffsets = offsets != null
                 ? offsets
-                : offsetsInTopic.entrySet()
-                    .stream()
+                : lastReadOffsets.entrySet().stream()
                     .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
             checkpointFileCache.putAll(newOffsets);
             try {
@@ -1020,12 +1020,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw new CacheException("KafkaTopicReader thread can't wait for a negative offset.");
             }
 
-            log.trace("Waiting to read offset {}. Currently at offset {}", offset, offsetsInTopic.get(partition));
+            log.trace("Waiting to read offset {}. Currently at offset {}", offset, lastReadOffsets.get(partition));
 
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = timeout.toNanos();
-                while ((offsetsInTopic.get(partition) < offset) && (timeoutNs > 0)) {
+                while (lastReadOffsets.get(partition) < offset && timeoutNs > 0) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
@@ -1037,21 +1037,66 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 offsetUpdateLock.unlock();
             }
 
-            if (offsetsInTopic.get(partition) < offset) {
+            if (lastReadOffsets.get(partition) < offset) {
                 throw new CacheTimeoutException(
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
-                        + "targetOffset: " + offset + ", offsetReached: " + offsetsInTopic.get(partition)
+                        + "targetOffset: " + offset + ", offsetReached: " + lastReadOffsets.get(partition)
                         + ", timeout(ms): " + timeout.toMillis());
             }
         }
 
-        private void waitUntilEndOffsets() throws CacheException {
+        private void waitUntilEndOffsets(Duration timeout) throws CacheException {
+            // Optimization in case of writes
+            if (hasValidLastWrittenOffsets()) {
+                if (hasReadToLastWrittenOffsets()) {
+                    return;
+                }
+                try {
+                    offsetUpdateLock.lock();
+                    long timeoutNs = timeout.toNanos();
+                    while (!hasReadToLastWrittenOffsets() && timeoutNs > 0) {
+                        try {
+                            timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
+                        } catch (InterruptedException e) {
+                            log.debug(
+                                "Interrupted while waiting for the background cache reader thread to reach"
+                                    + " the end offsets");
+                        }
+                    }
+                } finally {
+                    offsetUpdateLock.unlock();
+                }
+            } else {
+                waitUntilConsumerEndOffsets(timeout);
+            }
+        }
+
+        private boolean hasValidLastWrittenOffsets() {
+            // Remove invalid last written offsets
+            lastWrittenOffsets.entrySet().removeIf(entry ->
+                lastReadOffsets.getOrDefault(entry.getKey(), -1L) > entry.getValue());
+
+            return partitions.stream().allMatch(lastWrittenOffsets::containsKey);
+        }
+
+        private boolean hasReadToLastWrittenOffsets() {
+            return lastWrittenOffsets.entrySet().stream()
+                .allMatch(entry -> {
+                    int lastWrittenPartition = entry.getKey();
+                    long lastWrittenOffset = entry.getValue();
+                    long lastReadOffset = lastReadOffsets.getOrDefault(lastWrittenPartition, -1L);
+                    return lastReadOffset >= lastWrittenOffset;
+                });
+        }
+
+        private synchronized void waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
             isRunning.set(false);
+            // Wakeup call must be synchronized
             consumer.wakeup();
             try {
                 consumerLock.lock();
                 try {
-                    readToEndOffsets(Duration.ofMillis(timeout));
+                    readToEndOffsets(timeout);
                 } catch (Exception e) {
                     log.warn("Could not read to end offsets", e);
                 }

@@ -167,7 +167,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
     protected abstract void openDB();
 
     @Override
-    public synchronized void sync() {
+    public void sync() {
         // do nothing
     }
 

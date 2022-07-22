@@ -221,6 +221,60 @@ public class KafkaCacheTest extends ClusterTestHarness {
         }
     }
 
+    @Test
+    public void testSyncAfterPut() throws Exception {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
+            String key = "Kafka";
+            String value = "Rocks";
+            try {
+                kafkaCache.put(key, value);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+            }
+            kafkaCache.sync();
+            String retrievedValue;
+            try {
+                retrievedValue = kafkaCache.get(key);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+        }
+    }
+
+    @Test
+    public void testSyncAfterRestart() throws Exception {
+        Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance();
+        String key = "Kafka";
+        String value = "Rocks";
+        try {
+            try {
+                kafkaCache.put(key, value);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+            }
+            String retrievedValue;
+            try {
+                retrievedValue = kafkaCache.get(key);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+            kafkaCache.close();
+            // recreate kafka store
+            kafkaCache = createAndInitKafkaCacheInstance();
+            kafkaCache.sync();
+            try {
+                retrievedValue = kafkaCache.get(key);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+        } finally {
+            kafkaCache.close();
+        }
+    }
+
     protected Cache<String, String> createAndInitKafkaCacheInstance() throws Exception {
         Properties props = getKafkaCacheProperties();
         return CacheUtils.createAndInitKafkaCacheInstance(props);

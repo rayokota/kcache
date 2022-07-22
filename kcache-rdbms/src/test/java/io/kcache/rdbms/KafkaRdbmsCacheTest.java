@@ -28,7 +28,7 @@ public class KafkaRdbmsCacheTest extends KafkaPersistentCacheTest {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.RDBMS.toString());
         String prefix = KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG + "."
-            + CacheType.RDBMS.toString() + ".";
+            + CacheType.RDBMS + ".";
 
         //props.put(prefix + RdbmsCache.JDBC_URL_CONFIG, "jdbc:mysql://localhost:3306/kcache");
         //props.put(prefix + RdbmsCache.DIALECT_CONFIG, "MYSQL");

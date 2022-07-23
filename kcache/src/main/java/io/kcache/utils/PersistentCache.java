@@ -167,6 +167,11 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
     protected abstract void openDB();
 
     @Override
+    public void reset() {
+        // do nothing
+    }
+
+    @Override
     public void sync() {
         // do nothing
     }
@@ -360,6 +365,9 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
         }
 
         public void init() {
+        }
+
+        public void reset() {
         }
 
         public void sync() {

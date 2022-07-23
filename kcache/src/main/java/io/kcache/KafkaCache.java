@@ -299,6 +299,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public void reset() {
+        assertInitialized();
+        localCache.reset();
+        lastWrittenOffsets.clear();
+    }
+
+    @Override
     public void sync() {
         assertInitialized();
         localCache.sync();
@@ -1078,10 +1085,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         private boolean hasValidLastWrittenOffsets() {
-            // Remove invalid last written offsets
-            lastWrittenOffsets.entrySet().removeIf(entry ->
-                lastReadOffsets.getOrDefault(entry.getKey(), -1L) > entry.getValue());
-
             return partitions.stream().allMatch(lastWrittenOffsets::containsKey);
         }
 

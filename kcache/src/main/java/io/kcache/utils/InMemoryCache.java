@@ -60,6 +60,11 @@ public class InMemoryCache<K, V> extends ForwardingSortedMap<K, V> implements Ca
     }
 
     @Override
+    public void reset() {
+        // do nothing
+    }
+
+    @Override
     public void sync() {
         // do nothing
     }

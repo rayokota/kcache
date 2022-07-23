@@ -74,6 +74,11 @@ public class TransformedRawCache<K, V> implements Cache<K, V> {
     }
 
     @Override
+    public void reset() {
+        rawCache.reset();
+    }
+
+    @Override
     public void sync() {
         rawCache.sync();
     }

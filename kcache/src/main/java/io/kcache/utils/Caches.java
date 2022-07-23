@@ -57,6 +57,10 @@ public class Caches {
             m.init();
         }
 
+        public void reset() {
+            m.reset();
+        }
+
         public void sync() {
             m.sync();
         }

@@ -47,6 +47,12 @@ public interface Cache<K, V> extends SortedMap<K, V>, Configurable, Closeable {
     void init() throws CacheInitializationException;
 
     /**
+     * Resets the cache, clearing stale data before a sync.
+     * This can be used if the leader changes in a cluster.
+     */
+    void reset();
+
+    /**
      * Syncs (or re-initializes) the cache with the backing store.
      */
     void sync();

@@ -1054,15 +1054,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         private void waitUntilEndOffsets(Duration timeout) throws CacheException {
+            Map<Integer, Long> lastOffsets = new HashMap<>(lastWrittenOffsets);
             // Optimization in case of writes
-            if (hasValidLastWrittenOffsets()) {
-                if (hasReadToLastWrittenOffsets()) {
+            if (hasValidLastWrittenOffsets(lastOffsets)) {
+                if (hasReadToLastWrittenOffsets(lastOffsets)) {
                     return;
                 }
                 try {
                     offsetUpdateLock.lock();
                     long timeoutNs = timeout.toNanos();
-                    while (!hasReadToLastWrittenOffsets() && timeoutNs > 0) {
+                    while (!hasReadToLastWrittenOffsets(lastOffsets) && timeoutNs > 0) {
                         try {
                             timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                         } catch (InterruptedException e) {
@@ -1075,7 +1076,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     offsetUpdateLock.unlock();
                 }
 
-                if (hasReadToLastWrittenOffsets()) {
+                if (hasReadToLastWrittenOffsets(lastOffsets)) {
                     return;
                 } else {
                     log.warn("Could not read to last written offsets");
@@ -1084,12 +1085,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             waitUntilConsumerEndOffsets(timeout);
         }
 
-        private boolean hasValidLastWrittenOffsets() {
-            return partitions.stream().allMatch(lastWrittenOffsets::containsKey);
+        private boolean hasValidLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
+            return lastOffsets.keySet().containsAll(partitions);
         }
 
-        private boolean hasReadToLastWrittenOffsets() {
-            return lastWrittenOffsets.entrySet().stream()
+        private boolean hasReadToLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
+            return lastOffsets.entrySet().stream()
                 .allMatch(entry -> {
                     int lastWrittenPartition = entry.getKey();
                     long lastWrittenOffset = entry.getValue();

@@ -178,7 +178,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.localCache = localCache != null ? localCache : createLocalCache(backingCacheName, comparator);
         this.bootstrapBrokers = config.bootstrapBrokers();
 
-        log.info("Initializing Kafka cache {} with broker endpoints {} ", clientId, bootstrapBrokers);
+        log.info("Initializing Kafka cache {} with broker endpoints {}", clientId, bootstrapBrokers);
     }
 
     @SuppressWarnings("unchecked")
@@ -421,7 +421,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             topicDescription = admin.describeTopics(topics).allTopicNames().get(initTimeout, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
-                log.warn("Could not validate existing topic.");
+                log.warn("Could not validate existing topic {}", topic);
                 return;
             } else {
                 throw e;
@@ -857,15 +857,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     try {
                         offsets = consumer.offsetsForTimes(timestamps, timeout);
                     } catch (KafkaException e) {
-                        log.warn("Could not fetch offset times", e);
+                        log.warn("Could not fetch offset times for topic {}", topic, e);
                     }
                     for (TopicPartition tp : topicPartitions) {
                         if (offsets != null && offsets.get(tp) != null) {
                             consumer.seek(tp, offsets.get(tp).offset());
                         } else {
                             consumer.seekToBeginning(Collections.singleton(tp));
-                            log.warn("Could not find offset time for partition {}, timestamp {}, "
-                                + "seeking to beginning", tp.partition(), offset.getOffset());
+                            log.warn("Could not find offset time for topic {}, partition {}, ts {}, "
+                                + "seeking to beginning", tp.topic(), tp.partition(), offset.getOffset());
                         }
                     }
                     break;
@@ -1079,7 +1079,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (hasReadToLastWrittenOffsets(lastOffsets)) {
                     return;
                 } else {
-                    log.warn("Could not read to last written offsets");
+                    log.warn("Could not read to last written offsets {}", lastOffsets);
                 }
             }
             waitUntilConsumerEndOffsets(timeout);

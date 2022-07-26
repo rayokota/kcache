@@ -130,6 +130,15 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     default void endBatch(int count) {
     }
 
+    /**
+     * Invoked when an error has occurred while processing the batch.
+     *
+     * @param count batch count
+     * @param t the error
+     */
+    default void failBatch(int count, Throwable t) {
+    }
+
     @Override
     default void close() throws IOException {
     }

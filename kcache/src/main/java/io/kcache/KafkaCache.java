@@ -514,19 +514,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         V oldValue = key != null ? get(key) : null;
 
         // write to the Kafka topic
-        ProducerRecord<byte[], byte[]> producerRecord;
-        try {
-            producerRecord =
-                new ProducerRecord<>(
-                    topic,
-                    null,
-                    key == null ? null : this.keySerde.serializer().serialize(topic, headers, key),
-                    value == null ? null : this.valueSerde.serializer().serialize(topic, headers, value),
-                    headers
-                );
-        } catch (Exception e) {
-            throw new CacheException("Error serializing key while creating the Kafka produce record", e);
-        }
+        ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
 
         RecordMetadata recordMetadata;
         try {
@@ -557,56 +545,62 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         return new Metadata<>(recordMetadata, oldValue);
     }
 
-    public static class Metadata<V> {
-        private final RecordMetadata recordMetadata;
-        private final V oldValue;
-
-        public Metadata(RecordMetadata recordMetadata, V oldValue) {
-            this.recordMetadata = recordMetadata;
-            this.oldValue = oldValue;
+    private ProducerRecord<byte[], byte[]> toRecord(Headers headers, K key, V value) {
+        ProducerRecord<byte[], byte[]> producerRecord;
+        try {
+            producerRecord =
+                new ProducerRecord<>(
+                    topic,
+                    null,
+                    key == null ? null : this.keySerde.serializer().serialize(topic, headers, key),
+                    value == null ? null : this.valueSerde.serializer().serialize(topic, headers,
+                        value),
+                    headers
+                );
+        } catch (Exception e) {
+            throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
-
-        public RecordMetadata getRecordMetadata() {
-            return recordMetadata;
-        }
-
-        public V getOldValue() {
-            return oldValue;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            Metadata<?> metadata = (Metadata<?>) o;
-            return Objects.equals(recordMetadata, metadata.recordMetadata)
-                && Objects.equals(oldValue, metadata.oldValue);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(recordMetadata, oldValue);
-        }
-
-        @Override
-        public String toString() {
-            return "Metadata{" +
-                "recordMetadata=" + recordMetadata +
-                ", oldValue=" + oldValue +
-                '}';
-        }
+        return producerRecord;
     }
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
         assertInitialized();
-        // TODO: write to the Kafka topic as a batch
-        for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
-            put(entry.getKey(), entry.getValue());
+        if (entries.isEmpty()) {
+            return;
+        }
+        try {
+            Future<RecordMetadata> ack = null;
+            for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
+                K key = entry.getKey();
+                V value = entry.getValue();
+
+                // write to the Kafka topic
+                ProducerRecord<byte[], byte[]> producerRecord = toRecord(null, key, value);
+                log.trace("Sending record to Kafka cache topic: {}", producerRecord);
+                ack = producer.send(producerRecord);
+            }
+            producer.flush();
+            // Wait on last ack
+            RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+            log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
+            int lastWrittenPartition = recordMetadata.partition();
+            long lastWrittenOffset = recordMetadata.offset();
+            kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
+            lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
+        } catch (InterruptedException e) {
+            throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RecordTooLargeException) {
+                throw new EntryTooLargeException("Put operation failed because entry is too large");
+            } else {
+                throw new CacheException("Put operation failed while waiting for an ack from Kafka", e);
+            }
+        } catch (TimeoutException e) {
+            throw new CacheTimeoutException(
+                "Put operation timed out while waiting for an ack from Kafka", e);
+        } catch (KafkaException ke) {
+            throw new CacheException("Put operation to Kafka failed", ke);
         }
     }
 
@@ -938,8 +932,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                         oldMessage = localCache.put(messageKey, message);
                                     }
                                 }
-                                cacheUpdateHandler.handleUpdate(headers, messageKey, message, oldMessage,
-                                    tp, offset, timestamp, tsType, leaderEpoch);
+                                cacheUpdateHandler.handleUpdate(headers, messageKey, message,
+                                    oldMessage, tp, offset, timestamp, tsType, leaderEpoch);
                                 break;
                             case ROLLBACK_FAILURE:
                                 if (readOnly || messageKey == null) {
@@ -987,15 +981,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     }
                 }
                 cacheUpdateHandler.endBatch(count);
-            } catch (WakeupException we) {
-                // do nothing
-            } catch (RecordTooLargeException rtle) {
-                throw new IllegalStateException(
-                    "Consumer threw RecordTooLargeException. Data has been written that "
-                        + "exceeds the default maximum fetch size.", rtle);
-            } catch (RuntimeException e) {
-                log.error("KafkaTopicReader thread for {} has died for an unknown reason.", clientId, e);
-                throw e;
+            } catch (Throwable t) {
+                cacheUpdateHandler.failBatch(count, t);
+                if (t instanceof WakeupException) {
+                    // do nothing
+                } else if (t instanceof RecordTooLargeException) {
+                    throw new IllegalStateException(
+                        "Consumer threw RecordTooLargeException. Data has been written that "
+                            + "exceeds the default maximum fetch size.", t);
+                } else {
+                    log.error("KafkaTopicReader thread for {} has died for an unknown reason.", clientId, t);
+                    throw t;
+                }
             }
             return count;
         }
@@ -1130,6 +1127,50 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 consumer.close();
             }
             log.info("KafkaTopicReader thread shutdown complete for {}.", clientId);
+        }
+    }
+
+    public static class Metadata<V> {
+        private final RecordMetadata recordMetadata;
+        private final V oldValue;
+
+        public Metadata(RecordMetadata recordMetadata, V oldValue) {
+            this.recordMetadata = recordMetadata;
+            this.oldValue = oldValue;
+        }
+
+        public RecordMetadata getRecordMetadata() {
+            return recordMetadata;
+        }
+
+        public V getOldValue() {
+            return oldValue;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            Metadata<?> metadata = (Metadata<?>) o;
+            return Objects.equals(recordMetadata, metadata.recordMetadata)
+                && Objects.equals(oldValue, metadata.oldValue);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(recordMetadata, oldValue);
+        }
+
+        @Override
+        public String toString() {
+            return "Metadata{" +
+                "recordMetadata=" + recordMetadata +
+                ", oldValue=" + oldValue +
+                '}';
         }
     }
 }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.BiFunction;
 
 public class CacheUtils {
 
@@ -44,6 +45,22 @@ public class CacheUtils {
         kafkaCache.init();
         return kafkaCache;
     }
+
+    public static Cache<String, String> createAndInitKafkaCacheInstanceWithCustomPartitioner(
+        Properties props, BiFunction<String, String, Integer> customPartitioner)
+        throws CacheInitializationException {
+        KafkaCacheConfig config = new KafkaCacheConfig(props);
+        Cache<String, String> kafkaCache = Caches.concurrentCache(
+            new KafkaCache<>(config,
+                Serdes.String(),
+                Serdes.String(),
+                new StringUpdateHandler(),
+                null,
+                customPartitioner));
+        kafkaCache.init();
+        return kafkaCache;
+    }
+
     /**
      * Get a new instance of an SASL KafkaCache and initialize it.
      */

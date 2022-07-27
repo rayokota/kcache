@@ -81,6 +81,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 public class KafkaCache<K, V> implements Cache<K, V> {
@@ -114,19 +115,20 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
+    private BiFunction<K, V, Integer> customPartitioner;
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
                       Serde<V> valueSerde) {
         Properties props = new Properties();
         props.put(KafkaCacheConfig.KAFKACACHE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        setUp(new KafkaCacheConfig(props), keySerde, valueSerde, null, null, null, null);
+        setUp(new KafkaCacheConfig(props), keySerde, valueSerde, null, null, null, null, null);
     }
 
     public KafkaCache(KafkaCacheConfig config,
                       Serde<K> keySerde,
                       Serde<V> valueSerde) {
-        setUp(config, keySerde, valueSerde, null, null, null, null);
+        setUp(config, keySerde, valueSerde, null, null, null, null, null);
     }
 
     public KafkaCache(KafkaCacheConfig config,
@@ -134,7 +136,23 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                       Serde<V> valueSerde,
                       CacheUpdateHandler<K, V> cacheUpdateHandler,
                       Cache<K, V> localCache) {
-        setUp(config, keySerde, valueSerde, cacheUpdateHandler, null, null, localCache);
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, null, null, localCache, null);
+    }
+
+    public KafkaCache(KafkaCacheConfig config,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde,
+                      BiFunction<K, V, Integer> customPartitioner) {
+        setUp(config, keySerde, valueSerde, null, null, null, null, customPartitioner);
+    }
+
+    public KafkaCache(KafkaCacheConfig config,
+                      Serde<K> keySerde,
+                      Serde<V> valueSerde,
+                      CacheUpdateHandler<K, V> cacheUpdateHandler,
+                      Cache<K, V> localCache,
+                      BiFunction<K, V, Integer> customPartitioner) {
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, null, null, localCache, customPartitioner);
     }
 
     public KafkaCache(KafkaCacheConfig config,
@@ -143,7 +161,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                       CacheUpdateHandler<K, V> cacheUpdateHandler,
                       String backingCacheName,
                       Comparator<K> comparator) {
-        setUp(config, keySerde, valueSerde, cacheUpdateHandler, backingCacheName, comparator, null);
+        setUp(config, keySerde, valueSerde, cacheUpdateHandler, backingCacheName, comparator, null, null);
     }
 
     private void setUp(KafkaCacheConfig config,
@@ -152,7 +170,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                        CacheUpdateHandler<K, V> cacheUpdateHandler,
                        String backingCacheName,
                        Comparator<K> comparator,
-                       Cache<K, V> localCache) {
+                       Cache<K, V> localCache,
+                       BiFunction<K, V, Integer> customPartitioner) {
         this.config = config;
         this.topic = config.getString(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG);
         this.desiredReplicationFactor = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_REPLICATION_FACTOR_CONFIG);
@@ -177,6 +196,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.valueSerde = valueSerde;
         this.localCache = localCache != null ? localCache : createLocalCache(backingCacheName, comparator);
         this.bootstrapBrokers = config.bootstrapBrokers();
+        this.customPartitioner = customPartitioner;
 
         log.info("Initializing Kafka cache {} with broker endpoints {}", clientId, bootstrapBrokers);
     }
@@ -547,10 +567,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private ProducerRecord<byte[], byte[]> toRecord(Headers headers, K key, V value) {
         ProducerRecord<byte[], byte[]> producerRecord;
         try {
+            Integer partition = null;
+            if (customPartitioner != null) {
+                partition = customPartitioner.apply(key, value);
+            }
             producerRecord =
                 new ProducerRecord<>(
                     topic,
-                    null,
+                    partition,
                     key == null ? null : this.keySerde.serializer().serialize(topic, headers, key),
                     value == null ? null : this.valueSerde.serializer().serialize(topic, headers,
                         value),

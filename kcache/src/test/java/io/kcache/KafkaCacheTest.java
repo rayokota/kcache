@@ -20,6 +20,7 @@ import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.function.BiFunction;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -76,6 +78,31 @@ public class KafkaCacheTest extends ClusterTestHarness {
             kafkaCache.put(key, value);
             String retrievedValue = kafkaCache.get(key);
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
+        }
+    }
+
+    @Test
+    public void testSimplePutWithCustomPartitioner() throws Exception {
+        final Map<String, Integer> resultingPartitions = new HashMap<>();
+        final BiFunction<String, String, Integer> byFirstLetterPartitioner = (key, value) -> {
+            int ascii = value.charAt(0);
+            Integer partition = ascii % 8;
+            resultingPartitions.put(key, partition);
+            return partition;
+        };
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstanceWithCustomPartitioner(byFirstLetterPartitioner)) {
+            String key = "Kafka";
+            String value = "Rocks";
+            kafkaCache.put(key, value);
+            String key2 = "Rocks";
+            String value2 = "Kafka";
+            kafkaCache.put(key2, value2);
+            String retrievedValue = kafkaCache.get(key);
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+            assertEquals("Key \"Kafka\" expected in partition 2", resultingPartitions.get(key).toString(), "2");
+            String retrievedValue2 = kafkaCache.get(key2);
+            assertEquals("Retrieved value should match entered value", value2, retrievedValue2);
+            assertEquals("Key \"Rocks\" expected in partition 3", resultingPartitions.get(key2).toString(), "3");
         }
     }
 
@@ -275,6 +302,12 @@ public class KafkaCacheTest extends ClusterTestHarness {
         } finally {
             kafkaCache.close();
         }
+    }
+
+    protected Cache<String, String> createAndInitKafkaCacheInstanceWithCustomPartitioner(BiFunction<String, String, Integer> customPartitioner) throws Exception {
+        Properties props = getKafkaCacheProperties();
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, 8);
+        return CacheUtils.createAndInitKafkaCacheInstanceWithCustomPartitioner(props, customPartitioner);
     }
 
     protected Cache<String, String> createAndInitKafkaCacheInstance() throws Exception {

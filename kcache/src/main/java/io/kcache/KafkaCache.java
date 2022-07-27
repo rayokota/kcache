@@ -513,11 +513,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         assertInitialized();
         V oldValue = key != null ? get(key) : null;
 
-        // write to the Kafka topic
-        ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
-
         RecordMetadata recordMetadata;
         try {
+            // write to the Kafka topic
+            ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
             log.trace("Sending record to Kafka cache topic: {}", producerRecord);
             Future<RecordMetadata> ack = producer.send(producerRecord);
             recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
@@ -565,10 +564,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
+        if (readOnly) {
+            throw new CacheException("Cache is read-only");
+        }
+
         assertInitialized();
         if (entries.isEmpty()) {
             return;
         }
+
         try {
             Future<RecordMetadata> ack = null;
             for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
@@ -583,6 +587,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             producer.flush();
             // Wait on last ack
             RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+
             log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
             int lastWrittenPartition = recordMetadata.partition();
             long lastWrittenOffset = recordMetadata.offset();

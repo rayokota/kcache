@@ -116,7 +116,7 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
      * Retrieve the offsets to checkpoint.
      *
      * @param count batch count
-     * @return the offsets to checkpoint, or null
+     * @return the offsets to checkpoint, or null to use the latest offsets
      */
     default Map<TopicPartition, Long> checkpoint(int count) {
         return null;

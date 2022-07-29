@@ -1071,7 +1071,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         } catch (InterruptedException e) {
                             log.debug(
                                 "Interrupted while waiting for the background cache reader thread to reach"
-                                    + " the end offsets");
+                                    + " the end offsets", e);
                         }
                     }
                 } finally {

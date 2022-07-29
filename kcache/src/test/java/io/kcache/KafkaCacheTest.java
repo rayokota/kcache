@@ -20,6 +20,7 @@ import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -76,6 +77,24 @@ public class KafkaCacheTest extends ClusterTestHarness {
             kafkaCache.put(key, value);
             String retrievedValue = kafkaCache.get(key);
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
+        }
+    }
+
+    @Test
+    public void testSimplePutAll() throws Exception {
+        try (Cache<String, String> kafkaCache = createAndInitKafkaCacheInstance()) {
+            Map<String, String> entries = new HashMap<>();
+            String key = "Kafka";
+            String value = "Rocks";
+            entries.put(key, value);
+            String key2 = "Kafka2";
+            String value2 = "Rocks2";
+            entries.put(key2, value2);
+            kafkaCache.putAll(entries);
+            String retrievedValue = kafkaCache.get(key);
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+            retrievedValue = kafkaCache.get(key2);
+            assertEquals("Retrieved value should match entered value", value2, retrievedValue);
         }
     }
 

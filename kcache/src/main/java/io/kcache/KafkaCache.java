@@ -29,6 +29,7 @@ import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -513,19 +514,59 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         assertInitialized();
         V oldValue = key != null ? get(key) : null;
 
-        RecordMetadata recordMetadata;
-        try {
+        RecordMetadata recordMetadata = doPut(() -> {
             // write to the Kafka topic
             ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
             log.trace("Sending record to Kafka cache topic: {}", producerRecord);
-            Future<RecordMetadata> ack = producer.send(producerRecord);
+            return producer.send(producerRecord);
+        });
+
+        return new Metadata<>(recordMetadata, oldValue);
+    }
+
+    @Override
+    public void putAll(Map<? extends K, ? extends V> entries) {
+        if (readOnly) {
+            throw new CacheException("Cache is read-only");
+        }
+
+        assertInitialized();
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        doPut(() -> {
+            Future<RecordMetadata> ack = null;
+            for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
+                K key = entry.getKey();
+                V value = entry.getValue();
+
+                // write to the Kafka topic
+                ProducerRecord<byte[], byte[]> producerRecord = toRecord(null, key, value);
+                log.trace("Sending record to Kafka cache topic: {}", producerRecord);
+                ack = producer.send(producerRecord);
+            }
+            producer.flush();
+            // Return last ack
+            return ack;
+        });
+    }
+
+    private RecordMetadata doPut(Supplier<Future<RecordMetadata>> ackSupplier) {
+        RecordMetadata recordMetadata;
+        Integer lastWrittenPartition = null;
+        Long previousWrittenOffset = null;
+        boolean knownSuccessfulWrite = false;
+        try {
+            Future<RecordMetadata> ack = ackSupplier.get();
             recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
 
             log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
-            int lastWrittenPartition = recordMetadata.partition();
+            lastWrittenPartition = recordMetadata.partition();
             long lastWrittenOffset = recordMetadata.offset();
+            previousWrittenOffset = lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
             kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
-            lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
+            knownSuccessfulWrite = true;
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
         } catch (ExecutionException e) {
@@ -539,9 +580,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 "Put operation timed out while waiting for an ack from Kafka", e);
         } catch (KafkaException ke) {
             throw new CacheException("Put operation to Kafka failed", ke);
+        } finally {
+            if (!knownSuccessfulWrite && lastWrittenPartition != null && previousWrittenOffset != null) {
+                lastWrittenOffsets.put(lastWrittenPartition, previousWrittenOffset);
+            }
         }
-
-        return new Metadata<>(recordMetadata, oldValue);
+        return recordMetadata;
     }
 
     private ProducerRecord<byte[], byte[]> toRecord(Headers headers, K key, V value) {
@@ -560,53 +604,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
         return producerRecord;
-    }
-
-    @Override
-    public void putAll(Map<? extends K, ? extends V> entries) {
-        if (readOnly) {
-            throw new CacheException("Cache is read-only");
-        }
-
-        assertInitialized();
-        if (entries.isEmpty()) {
-            return;
-        }
-
-        try {
-            Future<RecordMetadata> ack = null;
-            for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
-                K key = entry.getKey();
-                V value = entry.getValue();
-
-                // write to the Kafka topic
-                ProducerRecord<byte[], byte[]> producerRecord = toRecord(null, key, value);
-                log.trace("Sending record to Kafka cache topic: {}", producerRecord);
-                ack = producer.send(producerRecord);
-            }
-            producer.flush();
-            // Wait on last ack
-            RecordMetadata recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
-
-            log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
-            int lastWrittenPartition = recordMetadata.partition();
-            long lastWrittenOffset = recordMetadata.offset();
-            kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
-            lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
-        } catch (InterruptedException e) {
-            throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof RecordTooLargeException) {
-                throw new EntryTooLargeException("Put operation failed because entry is too large");
-            } else {
-                throw new CacheException("Put operation failed while waiting for an ack from Kafka", e);
-            }
-        } catch (TimeoutException e) {
-            throw new CacheTimeoutException(
-                "Put operation timed out while waiting for an ack from Kafka", e);
-        } catch (KafkaException ke) {
-            throw new CacheException("Put operation to Kafka failed", ke);
-        }
     }
 
     @Override

@@ -17,7 +17,6 @@
 package io.kcache;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 import io.kcache.utils.Caches;
 import io.kcache.utils.InMemoryBoundedCache;

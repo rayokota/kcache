@@ -43,6 +43,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -109,6 +110,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private int checkpointVersion;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
+    private Partitioner partitioner;
     private Consumer<byte[], byte[]> consumer;
     private WorkerThread kafkaTopicReader;
     private KafkaCacheConfig config;
@@ -276,9 +278,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (!skipValidation) {
             createOrVerifyTopic();
         }
-        this.consumer = createConsumer();
+        this.consumer = new KafkaConsumer<>(getConsumerProperties());
         if (!readOnly) {
-            this.producer = createProducer();
+            Properties producerProperties = getProducerProperties();
+            this.producer = new KafkaProducer<>(producerProperties);
+            ProducerConfig producerConfig = new ProducerConfig(producerProperties);
+            this.partitioner = producerConfig.getConfiguredInstance(
+                ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                Partitioner.class,
+                Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
         }
 
         // start the background thread that subscribes to the Kafka topic and applies updates.
@@ -313,7 +321,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         localCache.sync();
     }
 
-    private Consumer<byte[], byte[]> createConsumer() {
+    private Properties getConsumerProperties() {
         Properties consumerProps = new Properties();
         addKafkaCacheConfigsToClientProperties(consumerProps);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, this.groupId);
@@ -325,10 +333,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
-        return new KafkaConsumer<>(consumerProps);
+        return consumerProps;
     }
 
-    private Producer<byte[], byte[]> createProducer() {
+    private Properties getProducerProperties() {
         Properties producerProps = new Properties();
         addKafkaCacheConfigsToClientProperties(producerProps);
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapBrokers);
@@ -338,7 +346,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
-        return new KafkaProducer<>(producerProps);
+        return producerProps;
     }
 
     private void addKafkaCacheConfigsToClientProperties(Properties props) {
@@ -595,19 +603,35 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private ProducerRecord<byte[], byte[]> toRecord(Headers headers, K key, V value) {
         ProducerRecord<byte[], byte[]> producerRecord;
         try {
+            byte[] keyBytes = key == null
+                ? null : this.keySerde.serializer().serialize(topic, headers, key);
+            byte[] valueBytes = value == null
+                ? null : this.valueSerde.serializer().serialize(topic, headers, value);
             producerRecord =
                 new ProducerRecord<>(
                     topic,
-                    null,
-                    key == null ? null : this.keySerde.serializer().serialize(topic, headers, key),
-                    value == null ? null : this.valueSerde.serializer().serialize(topic, headers,
-                        value),
+                    partition(topic, key, keyBytes, value, valueBytes),
+                    keyBytes,
+                    valueBytes,
                     headers
                 );
         } catch (Exception e) {
             throw new CacheException("Error serializing key while creating the Kafka produce record", e);
         }
         return producerRecord;
+    }
+
+    private Integer partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes) {
+        if (partitioner == null) {
+            return null;
+        }
+        int customPartition = partitioner.partition(topic, key, keyBytes, value, valueBytes, null);
+        if (customPartition < 0) {
+            throw new IllegalArgumentException(String.format(
+                "The partitioner generated an invalid partition number: %d. "
+                    + "Partition number should always be non-negative.", customPartition));
+        }
+        return customPartition;
     }
 
     @Override
@@ -683,7 +707,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public void flush() {
         assertInitialized();
-        producer.flush();
+        if (producer != null) {
+            producer.flush();
+        }
         localCache.flush();
     }
 
@@ -951,8 +977,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                 if (!Objects.equals(message, oldMessage)) {
                                     try {
                                         ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(
-                                            topic,
-                                            null,
+                                            record.topic(),
+                                            record.partition(),
                                             record.key(),
                                             oldMessage == null ? null
                                                 : valueSerde.serializer().serialize(topic, headers, oldMessage),

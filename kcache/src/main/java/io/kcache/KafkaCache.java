@@ -48,6 +48,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -622,16 +623,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     private Integer partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes) {
-        if (partitioner == null) {
+        if (partitioner == null || partitioner instanceof DefaultPartitioner) {
             return null;
         }
-        int customPartition = partitioner.partition(topic, key, keyBytes, value, valueBytes, null);
-        if (customPartition < 0) {
-            throw new IllegalArgumentException(String.format(
-                "The partitioner generated an invalid partition number: %d. "
-                    + "Partition number should always be non-negative.", customPartition));
+        try {
+            int customPartition = partitioner.partition(topic, key, keyBytes, value, valueBytes,
+                null);
+            if (customPartition < 0) {
+                throw new IllegalArgumentException(String.format(
+                    "The partitioner generated an invalid partition number: %d. "
+                        + "Partition number should always be non-negative.", customPartition));
+            }
+            return customPartition;
+        } catch (Exception e) {
+            log.warn("Could not invoke partitioner", e);
+            return null;
         }
-        return customPartition;
     }
 
     @Override

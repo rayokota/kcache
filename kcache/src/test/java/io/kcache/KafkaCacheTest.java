@@ -19,6 +19,7 @@ package io.kcache;
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
+import io.kcache.utils.CustomPartitioner;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.junit.After;
 import org.junit.Before;
@@ -294,6 +296,32 @@ public class KafkaCacheTest extends ClusterTestHarness {
         } finally {
             kafkaCache.close();
         }
+    }
+
+    @Test
+    public void testCustomPartitioner() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        props.put("kafkacache." + ProducerConfig.PARTITIONER_CLASS_CONFIG,
+            CustomPartitioner.class.getName());
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
+            String key = "Kafka";
+            String value = "Rocks";
+            String retrievedValue;
+            try {
+                kafkaCache.put(key, value);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store put(Kafka, Rocks) operation failed", e);
+            }
+            try {
+                retrievedValue = kafkaCache.get(key);
+            } catch (CacheException e) {
+                throw new RuntimeException("Kafka store get(Kafka) operation failed", e);
+            }
+            assertEquals("Retrieved value should match entered value", value, retrievedValue);
+        }
+
+        assertEquals(Collections.singleton("Kafka"), CustomPartitioner.keys);
+        assertEquals(Collections.singleton("Rocks"), CustomPartitioner.values);
     }
 
     protected Cache<String, String> createAndInitKafkaCacheInstance() throws Exception {

@@ -17,6 +17,7 @@
 package io.kcache;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import io.kcache.utils.Caches;
 import io.kcache.utils.InMemoryBoundedCache;
@@ -90,7 +91,7 @@ public class KafkaBoundedCacheTest extends KafkaCacheTest {
     protected Properties getKafkaCacheProperties() throws Exception {
         Properties props = super.getKafkaCacheProperties();
         props.put(KafkaCacheConfig.KAFKACACHE_BACKING_CACHE_CONFIG, CacheType.MEMORY.toString());
-        props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, 1);
+        props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, 2);
         return props;
     }
 }

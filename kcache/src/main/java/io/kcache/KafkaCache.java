@@ -627,8 +627,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             return null;
         }
         try {
-            int customPartition = partitioner.partition(topic, key, keyBytes, value, valueBytes,
-                null);
+            int customPartition = partitioner.partition(topic, key, keyBytes, value, valueBytes, null);
             if (customPartition < 0) {
                 throw new IllegalArgumentException(String.format(
                     "The partitioner generated an invalid partition number: %d. "

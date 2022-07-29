@@ -581,8 +581,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (KafkaException ke) {
             throw new CacheException("Put operation to Kafka failed", ke);
         } finally {
-            if (!knownSuccessfulWrite && lastWrittenPartition != null && previousWrittenOffset != null) {
-                lastWrittenOffsets.put(lastWrittenPartition, previousWrittenOffset);
+            if (!knownSuccessfulWrite && lastWrittenPartition != null) {
+                if (previousWrittenOffset != null) {
+                    lastWrittenOffsets.put(lastWrittenPartition, previousWrittenOffset);
+                } else {
+                    lastWrittenOffsets.remove(lastWrittenPartition);
+                }
             }
         }
         return recordMetadata;

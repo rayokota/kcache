@@ -301,15 +301,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public void reset() {
         assertInitialized();
-        localCache.reset();
         lastWrittenOffsets.clear();
+        localCache.reset();
     }
 
     @Override
     public void sync() {
         assertInitialized();
-        localCache.sync();
         kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
+        localCache.sync();
     }
 
     private Consumer<byte[], byte[]> createConsumer() {
@@ -682,6 +682,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public void flush() {
         assertInitialized();
+        producer.flush();
         localCache.flush();
     }
 
@@ -1103,7 +1104,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         private synchronized void waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
             isRunning.set(false);
-            // Wakeup call must be synchronized
             consumer.wakeup();
             try {
                 consumerLock.lock();

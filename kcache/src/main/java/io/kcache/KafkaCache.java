@@ -535,27 +535,33 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
+        putAll(null, entries, true);
+    }
+
+    public RecordMetadata putAll(Headers headers, Map<? extends K, ? extends V> entries, boolean flush) {
         if (readOnly) {
             throw new CacheException("Cache is read-only");
         }
 
         assertInitialized();
         if (entries.isEmpty()) {
-            return;
+            return null;
         }
 
-        doPut(() -> {
+        return doPut(() -> {
             Future<RecordMetadata> ack = null;
             for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
                 K key = entry.getKey();
                 V value = entry.getValue();
 
                 // write to the Kafka topic
-                ProducerRecord<byte[], byte[]> producerRecord = toRecord(null, key, value);
+                ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
                 log.trace("Sending record to Kafka cache topic: {}", producerRecord);
                 ack = producer.send(producerRecord);
             }
-            producer.flush();
+            if (flush) {
+                producer.flush();
+            }
             // Return last ack
             return ack;
         });
@@ -643,10 +649,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public V remove(Object key) {
-        if (readOnly) {
-            throw new CacheException("Cache is read-only");
-        }
-        assertInitialized();
         // delete from the Kafka topic by writing a null value for the key
         return put((K) key, null);
     }

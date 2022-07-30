@@ -516,6 +516,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     public Metadata<V> put(Headers headers, K key, V value) {
+        return put(headers, key, value, false);
+    }
+
+    public Metadata<V> put(Headers headers, K key, V value, boolean flush) {
         if (readOnly) {
             throw new CacheException("Cache is read-only");
         }
@@ -527,7 +531,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // write to the Kafka topic
             ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
             log.trace("Sending record to Kafka cache topic: {}", producerRecord);
-            return producer.send(producerRecord);
+            Future<RecordMetadata> ack = producer.send(producerRecord);
+            if (flush) {
+                producer.flush();
+            }
+            // Return last ack
+            return ack;
         });
 
         return new Metadata<>(recordMetadata, oldValue);
@@ -535,7 +544,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void putAll(Map<? extends K, ? extends V> entries) {
-        putAll(null, entries, true);
+        putAll(null, entries);
+    }
+
+    public RecordMetadata putAll(Headers headers, Map<? extends K, ? extends V> entries) {
+        return putAll(headers, entries, true);
     }
 
     public RecordMetadata putAll(Headers headers, Map<? extends K, ? extends V> entries, boolean flush) {

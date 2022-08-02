@@ -293,8 +293,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // start the background thread that subscribes to the Kafka topic and applies updates.
         // the thread must be created after the topic has been created.
         this.kafkaTopicReader = new WorkerThread();
+        int count = 0;
         try {
-            this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
+            count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
         } catch (IOException e) {
             throw new CacheInitializationException("Failed to read to end offsets", e);
         }
@@ -305,7 +306,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        this.cacheUpdateHandler.cacheInitialized(new HashMap<>(checkpointFileCache));
+        cacheUpdateHandler.cacheInitialized(new HashMap<>(checkpointFileCache), count);
     }
 
     @Override
@@ -313,13 +314,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         assertInitialized();
         lastWrittenOffsets.clear();
         localCache.reset();
+        cacheUpdateHandler.cacheReset();
     }
 
     @Override
     public void sync() {
         assertInitialized();
-        kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
+        int count = kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
         localCache.sync();
+        cacheUpdateHandler.cacheSynchronized(new HashMap<>(checkpointFileCache), count);
     }
 
     private Properties getConsumerProperties() {
@@ -732,6 +735,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             producer.flush();
         }
         localCache.flush();
+        cacheUpdateHandler.cacheFlushed();
     }
 
     @Override
@@ -751,9 +755,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (checkpointFile != null) {
             checkpointFile.close();
         }
-        if (cacheUpdateHandler != null) {
-            cacheUpdateHandler.close();
-        }
+        cacheUpdateHandler.close();
         log.info("Kafka cache shut down complete for {}", clientId);
     }
 
@@ -761,6 +763,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     public void destroy() throws IOException {
         assertInitialized();
         localCache.destroy();
+        cacheUpdateHandler.cacheDestroyed();
     }
 
     private void assertInitialized() throws CacheException {
@@ -856,7 +859,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.info("KafkaTopicReader thread started for {}.", clientId);
         }
 
-        private void readToEndOffsets(Duration timeout) throws IOException {
+        private int readToEndOffsets(Duration timeout) throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
             Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment, timeout);
             log.info("Reading to end of offsets {}", endOffsets);
@@ -877,6 +880,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);
+            return count;
         }
 
         private void seekToStart(Collection<TopicPartition> topicPartitions, Duration timeout) {
@@ -1104,12 +1108,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void waitUntilEndOffsets(Duration timeout) throws CacheException {
+        // Returns the number of records read by the invoking thread
+        private int waitUntilEndOffsets(Duration timeout) throws CacheException {
             Map<Integer, Long> lastOffsets = new HashMap<>(lastWrittenOffsets);
             // Optimization in case of writes
             if (hasValidLastWrittenOffsets(lastOffsets)) {
                 if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                    return;
+                    return 0;
                 }
                 try {
                     offsetUpdateLock.lock();
@@ -1128,12 +1133,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
 
                 if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                    return;
+                    return 0;
                 } else {
                     log.warn("Could not read to last written offsets {}", lastOffsets);
                 }
             }
-            waitUntilConsumerEndOffsets(timeout);
+            return waitUntilConsumerEndOffsets(timeout);
         }
 
         private boolean hasValidLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
@@ -1150,18 +1155,20 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 });
         }
 
-        private synchronized void waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
+        private synchronized int waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
             isRunning.set(false);
             consumer.wakeup();
             try {
+                int count = 0;
                 consumerLock.lock();
                 try {
-                    readToEndOffsets(timeout);
+                    count = readToEndOffsets(timeout);
                 } catch (Exception e) {
                     log.warn("Could not read to end offsets", e);
                 }
                 isRunning.set(true);
                 runningCondition.signalAll();
+                return count;
             } finally {
                 consumerLock.unlock();
             }

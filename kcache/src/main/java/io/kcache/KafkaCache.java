@@ -259,7 +259,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void init() throws CacheInitializationException {
+    public synchronized void init() throws CacheInitializationException {
         if (initialized.get()) {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
@@ -311,7 +311,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void reset() {
-        assertInitialized();
+        if (!initialized.get()) {
+            return;
+        }
         lastWrittenOffsets.clear();
         localCache.reset();
         cacheUpdateHandler.cacheReset();
@@ -319,7 +321,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
-        assertInitialized();
+        if (!initialized.get()) {
+            return;
+        }
         int count = kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
         localCache.sync();
         cacheUpdateHandler.cacheSynchronized(count, new HashMap<>(checkpointFileCache));
@@ -739,7 +743,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         if (kafkaTopicReader != null) {
             try {
                 kafkaTopicReader.shutdown();
@@ -760,7 +764,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     @Override
-    public void destroy() throws IOException {
+    public synchronized void destroy() throws IOException {
         assertInitialized();
         localCache.destroy();
         cacheUpdateHandler.cacheDestroyed();
@@ -1155,22 +1159,24 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 });
         }
 
-        private synchronized int waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
-            isRunning.set(false);
-            consumer.wakeup();
-            try {
-                int count = 0;
-                consumerLock.lock();
+        private int waitUntilConsumerEndOffsets(Duration timeout) throws CacheException {
+            synchronized (KafkaCache.this) {
+                isRunning.set(false);
+                consumer.wakeup();
                 try {
-                    count = readToEndOffsets(timeout);
-                } catch (Exception e) {
-                    log.warn("Could not read to end offsets", e);
+                    int count = 0;
+                    consumerLock.lock();
+                    try {
+                        count = readToEndOffsets(timeout);
+                    } catch (Exception e) {
+                        log.warn("Could not read to end offsets", e);
+                    }
+                    isRunning.set(true);
+                    runningCondition.signalAll();
+                    return count;
+                } finally {
+                    consumerLock.unlock();
                 }
-                isRunning.set(true);
-                runningCondition.signalAll();
-                return count;
-            } finally {
-                consumerLock.unlock();
             }
         }
 

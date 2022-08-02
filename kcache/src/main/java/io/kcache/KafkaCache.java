@@ -306,7 +306,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        cacheUpdateHandler.cacheInitialized(new HashMap<>(checkpointFileCache), count);
+        cacheUpdateHandler.cacheInitialized(count, new HashMap<>(checkpointFileCache));
     }
 
     @Override
@@ -322,7 +322,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         assertInitialized();
         int count = kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
         localCache.sync();
-        cacheUpdateHandler.cacheSynchronized(new HashMap<>(checkpointFileCache), count);
+        cacheUpdateHandler.cacheSynchronized(count, new HashMap<>(checkpointFileCache));
     }
 
     private Properties getConsumerProperties() {

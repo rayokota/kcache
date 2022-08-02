@@ -36,10 +36,10 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     /**
      * Invoked after the cache is initialized.
      *
-     * @param checkpoints current checkpoints
      * @param count the number of records consumed by the invoking thread
+     * @param checkpoints current checkpoints
      */
-    default void cacheInitialized(Map<TopicPartition, Long> checkpoints, int count) {
+    default void cacheInitialized(int count, Map<TopicPartition, Long> checkpoints) {
     }
 
     /**
@@ -51,10 +51,10 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     /**
      * Invoked after the cache is synchronized.
      *
-     * @param checkpoints current checkpoints
      * @param count the number of records consumed by the invoking thread
+     * @param checkpoints current checkpoints
      */
-    default void cacheSynchronized(Map<TopicPartition, Long> checkpoints, int count) {
+    default void cacheSynchronized(int count, Map<TopicPartition, Long> checkpoints) {
     }
 
     /**

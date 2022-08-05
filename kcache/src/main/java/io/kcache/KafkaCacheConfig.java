@@ -95,13 +95,17 @@ public class KafkaCacheConfig extends AbstractConfig {
      */
     public static final String KAFKACACHE_TOPIC_READ_ONLY_CONFIG = "kafkacache.topic.read.only";
     /**
+     * <code>kafkacache.init.timeout.ms</code>
+     */
+    public static final String KAFKACACHE_INIT_TIMEOUT_CONFIG = "kafkacache.init.timeout.ms";
+    /**
      * <code>kafkacache.timeout.ms</code>
      */
     public static final String KAFKACACHE_TIMEOUT_CONFIG = "kafkacache.timeout.ms";
     /**
-     * <code>kafkacache.init.timeout.ms</code>
+     * <code>kafkacache.poll.timeout.ms</code>
      */
-    public static final String KAFKACACHE_INIT_TIMEOUT_CONFIG = "kafkacache.init.timeout.ms";
+    public static final String KAFKACACHE_POLL_TIMEOUT_CONFIG = "kafkacache.poll.timeout.ms";
     /**
      * <code>kafkacache.backing.cache</code>
      */
@@ -205,6 +209,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "that stores data.";
     protected static final String KAFKACACHE_TIMEOUT_DOC =
         "The timeout for an operation on the Kafka cache.";
+    protected static final String KAFKACACHE_POLL_TIMEOUT_DOC =
+        "The timeout for a consumer poll.";
     protected static final String KAFKACACHE_BACKING_CACHE_DOC =
         "The type of backing cache, one of `memory`, `bdbje`, `lmdb`, `rdbms`, and `rocksdb`.";
     protected static final String KAFKACACHE_BOUNDED_CACHE_SIZE_DOC =
@@ -313,6 +319,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_TIMEOUT_CONFIG, ConfigDef.Type.INT, 60000, atLeast(0),
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_TIMEOUT_DOC
+            )
+            .define(KAFKACACHE_POLL_TIMEOUT_CONFIG, ConfigDef.Type.LONG, Long.MAX_VALUE, atLeast(0),
+                ConfigDef.Importance.LOW, KAFKACACHE_POLL_TIMEOUT_DOC
             )
             .define(KAFKACACHE_BACKING_CACHE_CONFIG, ConfigDef.Type.STRING,
                 CacheType.MEMORY.toString(),

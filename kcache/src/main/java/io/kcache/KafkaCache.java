@@ -107,6 +107,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private boolean readOnly;
     private int initTimeout;
     private int timeout;
+    private long pollTimeout;
     private String checkpointDir;
     private int checkpointVersion;
     private String bootstrapBrokers;
@@ -173,6 +174,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.readOnly = config.getBoolean(KafkaCacheConfig.KAFKACACHE_TOPIC_READ_ONLY_CONFIG);
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
+        this.pollTimeout = config.getLong(KafkaCacheConfig.KAFKACACHE_POLL_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
         this.checkpointVersion = config.getInt(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_VERSION_CONFIG);
         this.cacheUpdateHandler =
@@ -952,7 +954,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private int poll() {
             int count = 0;
             try {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
                 count = records.count();
                 cacheUpdateHandler.startBatch(count);
                 for (ConsumerRecord<byte[], byte[]> record : records) {

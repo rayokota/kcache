@@ -48,7 +48,7 @@
         <apache.directory.api.version>1.0.0-M33</apache.directory.api.version>
         <apache.directory.server.version>2.0.0-M22</apache.directory.server.version>
         <bouncycastle.version>1.70</bouncycastle.version>
-        <caffeine.version>2.9.2</caffeine.version>
+        <caffeine.version>2.9.3</caffeine.version>
         <guava.version>31.1-jre</guava.version>
         <hikari.version>4.0.3</hikari.version>
         <jooq.version>3.14.11</jooq.version>

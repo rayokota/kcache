@@ -318,9 +318,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void reset() {
-        if (!initialized.get()) {
-            return;
-        }
         lastWrittenOffsets.clear();
         localCache.reset();
         cacheUpdateHandler.cacheReset();

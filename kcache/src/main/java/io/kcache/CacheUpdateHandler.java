@@ -51,9 +51,10 @@ public interface CacheUpdateHandler<K, V> extends Closeable {
     /**
      * Invoked after the cache is synchronized.
      *
+     * @param count the number of records consumed during synchronization
      * @param checkpoints current checkpoints
      */
-    default void cacheSynchronized(Map<TopicPartition, Long> checkpoints) {
+    default void cacheSynchronized(int count, Map<TopicPartition, Long> checkpoints) {
     }
 
     /**

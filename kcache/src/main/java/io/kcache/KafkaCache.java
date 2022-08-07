@@ -123,7 +123,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
-    private final Queue<CompletableFuture<Void>> syncCallbacks = new ArrayDeque<>();
+    private final Queue<CompletableFuture<Integer>> syncCallbacks = new ArrayDeque<>();
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -325,30 +325,32 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
-        boolean synced = false;
+        int count = 0;
         if (kafkaTopicReader != null) {
-            synced = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
+            count = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
         }
-        if (!synced) {
-            waitUntilEndOffsets();
+        if (count < 0) {
+            count = waitUntilEndOffsets();
         }
         localCache.sync();
-        cacheUpdateHandler.cacheSynchronized(new HashMap<>(checkpointFileCache));
+        cacheUpdateHandler.cacheSynchronized(count, new HashMap<>(checkpointFileCache));
     }
 
-    private void waitUntilEndOffsets() throws CacheException {
-        CompletableFuture<Void> future = new CompletableFuture<>();
+    private int waitUntilEndOffsets() throws CacheException {
+        CompletableFuture<Integer> future = new CompletableFuture<>();
         synchronized (this) {
             syncCallbacks.add(future);
         }
         if (consumer != null) {
             consumer.wakeup();
         }
+        int count = 0;
         try {
-            future.get();
+            count = future.get();
         } catch (InterruptedException | ExecutionException e) {
             log.warn("Failed to read to end offsets", e);
         }
+        return count;
     }
 
     private Properties getConsumerProperties() {
@@ -953,9 +955,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 numCallbacks = syncCallbacks.size();
             }
 
+            int count = 0;
             if (numCallbacks > 0) {
                 try {
-                    readToEndOffsets(Duration.ofMillis(timeout));
+                    count = readToEndOffsets(Duration.ofMillis(timeout));
                 } catch (KafkaException | IOException e) {
                     log.error("Error while reading to end offsets", e);
                     // Restart the doWork() loop
@@ -967,9 +970,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // Only invoke exactly the number of callbacks we found before the read to log end
                 // since it is possible for another write + sync to sneak in the meantime
                 for (int i = 0; i < numCallbacks; i++) {
-                    CompletableFuture<Void> cb = syncCallbacks.poll();
+                    CompletableFuture<Integer> cb = syncCallbacks.poll();
                     if (cb != null) {
-                        cb.complete(null);
+                        cb.complete(count);
                     }
                 }
             }
@@ -1138,18 +1141,19 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private boolean waitUntilLastWrittenOffsets(Duration timeout) throws CacheException {
+        private int waitUntilLastWrittenOffsets(Duration timeout) throws CacheException {
             Map<Integer, Long> lastOffsets = new HashMap<>(lastWrittenOffsets);
             if (!hasValidLastWrittenOffsets(lastOffsets)) {
-                return false;
+                return -1;
             }
-            if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                return true;
+            int count = countUnreadOffsets(lastOffsets);
+            if (count == 0) {
+                return count;
             }
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = timeout.toNanos();
-                while (!hasReadToLastWrittenOffsets(lastOffsets) && timeoutNs > 0) {
+                while (countUnreadOffsets(lastOffsets) > 0 && timeoutNs > 0) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
@@ -1162,27 +1166,28 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 offsetUpdateLock.unlock();
             }
 
-            if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                return true;
+            if (countUnreadOffsets(lastOffsets) == 0) {
+                return count;
             } else {
                 log.warn("Could not read to last written offsets {}", lastOffsets);
             }
 
-            return false;
+            return -1;
         }
 
         private boolean hasValidLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
             return lastOffsets.keySet().containsAll(partitions);
         }
 
-        private boolean hasReadToLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
+        private int countUnreadOffsets(Map<Integer, Long> lastOffsets) {
             return lastOffsets.entrySet().stream()
-                .allMatch(entry -> {
+                .map(entry -> {
                     int lastWrittenPartition = entry.getKey();
                     long lastWrittenOffset = entry.getValue();
                     long lastReadOffset = lastReadOffsets.getOrDefault(lastWrittenPartition, -1L);
-                    return lastReadOffset >= lastWrittenOffset;
-                });
+                    return Math.max((int)(lastWrittenOffset - lastReadOffset), 0);
+                })
+                .reduce(0, Integer::sum);
         }
 
         @Override

@@ -325,7 +325,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
-        int count = 0;
+        int count = -1;
         if (kafkaTopicReader != null) {
             count = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
         }

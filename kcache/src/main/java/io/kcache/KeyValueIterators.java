@@ -31,7 +31,7 @@ import java.util.NoSuchElementException;
 
 public class KeyValueIterators {
 
-    private static final KeyValueIterator EMPTY_ITERATOR = new EmptyKeyValueIterator();
+    private static final KeyValueIterator<?, ?> EMPTY_ITERATOR = new EmptyKeyValueIterator<>();
 
     public static <K, V> KeyValueIterator<K, V> limit(final KeyValueIterator<K, V> iterator, final int limit) {
         return new KeyValueIterator<K, V>() {
@@ -152,7 +152,7 @@ public class KeyValueIterators {
 
     @SafeVarargs
     public static <K, V> KeyValueIterator<K, V> concat(final KeyValueIterator<K, V>... iterators) {
-        final MultiIterator<K, V> iterator = new MultiIterator<K, V>();
+        final MultiIterator<K, V> iterator = new MultiIterator<>();
         for (final KeyValueIterator<K, V> itty : iterators) {
             iterator.addIterator(itty);
         }

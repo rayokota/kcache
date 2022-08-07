@@ -431,7 +431,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         NewTopic topicRequest = new NewTopic(topic, desiredNumPartitions, (short) topicReplicationFactor);
-        Map<String, String> topicConfigs = new HashMap(config.originalsWithPrefix("kafkacache.topic.config."));
+        Map<String, String> topicConfigs = config.originalsWithPrefix("kafkacache.topic.config.")
+            .entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> e.getValue().toString()));
         topicConfigs.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_COMPACT

@@ -530,7 +530,7 @@ public abstract class PersistentCache<K, V> implements Cache<K, V>, Configurable
         }
 
         public SubCache<K, V> descendingCache() {
-            return new SubCache<K, V>(m, lo, loInclusive,
+            return new SubCache<>(m, lo, loInclusive,
                 hi, hiInclusive, !isDescending);
         }
 

@@ -115,7 +115,7 @@ public class RocksDBCache<K, V> extends PersistentCache<K, V> {
         final DBOptions dbOptions = new DBOptions();
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
-        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<K>(keySerde(), comparator()));
+        userSpecifiedOptions.setComparator(new RocksDBKeySliceComparator<>(keySerde(), comparator()));
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         cache = new LRUCache(BLOCK_CACHE_SIZE);

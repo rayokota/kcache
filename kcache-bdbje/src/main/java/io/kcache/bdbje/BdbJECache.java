@@ -87,7 +87,7 @@ public class BdbJECache<K, V> extends PersistentCache<K, V> {
                       Serde<K> keySerde,
                       Serde<V> valueSerde,
                       Comparator<K> comparator) {
-        super(name, parentDir, rootDir, new SerdeWrapper<K>(keySerde), valueSerde, comparator);
+        super(name, parentDir, rootDir, new SerdeWrapper<>(keySerde), valueSerde, comparator);
     }
 
     @Override

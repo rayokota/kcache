@@ -328,9 +328,30 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
-        kafkaTopicReader.waitUntilEndOffsets(Duration.ofMillis(timeout));
+        boolean synced = false;
+        if (kafkaTopicReader != null) {
+            synced = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
+        }
+        if (!synced) {
+            waitUntilEndOffsets();
+        }
         localCache.sync();
         cacheUpdateHandler.cacheSynchronized(new HashMap<>(checkpointFileCache));
+    }
+
+    private void waitUntilEndOffsets() throws CacheException {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        synchronized (this) {
+            syncCallbacks.add(future);
+        }
+        if (consumer != null) {
+            consumer.wakeup();
+        }
+        try {
+            future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.warn("Failed to read to end offsets", e);
+        }
     }
 
     private Properties getConsumerProperties() {
@@ -1119,37 +1140,37 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
-        private void waitUntilEndOffsets(Duration timeout) throws CacheException {
+        private boolean waitUntilLastWrittenOffsets(Duration timeout) throws CacheException {
             Map<Integer, Long> lastOffsets = new HashMap<>(lastWrittenOffsets);
-            // Optimization in case of writes
-            if (hasValidLastWrittenOffsets(lastOffsets)) {
-                if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                    return;
-                }
-                try {
-                    offsetUpdateLock.lock();
-                    long timeoutNs = timeout.toNanos();
-                    while (!hasReadToLastWrittenOffsets(lastOffsets) && timeoutNs > 0) {
-                        try {
-                            timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
-                        } catch (InterruptedException e) {
-                            log.debug(
-                                "Interrupted while waiting for the background cache reader thread to reach"
-                                    + " the end offsets", e);
-                        }
+            if (!hasValidLastWrittenOffsets(lastOffsets)) {
+                return false;
+            }
+            if (hasReadToLastWrittenOffsets(lastOffsets)) {
+                return true;
+            }
+            try {
+                offsetUpdateLock.lock();
+                long timeoutNs = timeout.toNanos();
+                while (!hasReadToLastWrittenOffsets(lastOffsets) && timeoutNs > 0) {
+                    try {
+                        timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
+                    } catch (InterruptedException e) {
+                        log.debug(
+                            "Interrupted while waiting for the background cache reader thread to reach"
+                                + " the end offsets", e);
                     }
-                } finally {
-                    offsetUpdateLock.unlock();
                 }
-
-                if (hasReadToLastWrittenOffsets(lastOffsets)) {
-                    return;
-                } else {
-                    log.warn("Could not read to last written offsets {}", lastOffsets);
-                }
+            } finally {
+                offsetUpdateLock.unlock();
             }
 
-            waitUntilConsumerEndOffsets();
+            if (hasReadToLastWrittenOffsets(lastOffsets)) {
+                return true;
+            } else {
+                log.warn("Could not read to last written offsets {}", lastOffsets);
+            }
+
+            return false;
         }
 
         private boolean hasValidLastWrittenOffsets(Map<Integer, Long> lastOffsets) {
@@ -1164,19 +1185,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     long lastReadOffset = lastReadOffsets.getOrDefault(lastWrittenPartition, -1L);
                     return lastReadOffset >= lastWrittenOffset;
                 });
-        }
-
-        private void waitUntilConsumerEndOffsets() throws CacheException {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            synchronized (this) {
-                syncCallbacks.add(future);
-            }
-            consumer.wakeup();
-            try {
-                future.get();
-            } catch (InterruptedException | ExecutionException e) {
-                log.warn("Failed to read to end offsets", e);
-            }
         }
 
         @Override

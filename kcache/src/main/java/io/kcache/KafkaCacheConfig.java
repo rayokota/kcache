@@ -190,7 +190,7 @@ public class KafkaCacheConfig extends AbstractConfig {
         "The desired replication factor of the topic. The actual replication factor "
             + "will be the smaller of this value and the number of live Kafka brokers.";
     protected static final String KAFKACACHE_TOPIC_NUM_PARTITIONS_DOC =
-        "The desired number of partitions factor for the topic.";
+        "The desired number of partitions for the topic.";
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_DOC =
         "A list of partitions to consume, or all partitions if not specified.";
     protected static final String KAFKACACHE_TOPIC_PARTITIONS_OFFSET_DOC =

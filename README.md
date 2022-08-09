@@ -21,7 +21,7 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>4.0.6</version>
+    <version>4.0.10</version>
 </dependency>
 ```
 
@@ -67,7 +67,9 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.group.id` - The group ID to use for the internal consumer.  Defaults to `kafkacache`.
 - `kafkacache.client.id` - The client ID to use for the internal consumer.  Defaults to `kafka-cache-reader-<topic>`.
 - `kafkacache.topic` - The name of the compacted topic.  Defaults to `_cache`.
-- `kafkacache.topic.replication.factor` - The replication factor for the compacted topic.  Defaults to 3.
+- `kafkacache.topic.replication.factor` - The desired replication factor for the compacted topic.  Defaults to 3.
+- `kafkacache.topic.num.partitions` - The desired number of partitions for for the compacted topic.  Defaults to 1.
+- `kafkacache.topic.partitions` - A list of partitions to consume, or all partitions if not specified.
 - `kafkacache.topic.partitions` - A list of partitions to consume, or all partitions if not specified.
 - `kafkacache.topic.partitions.offset` - The offset to start consuming all partitions from, one of `beginning`, `end`, 
    a positive number representing an absolute offset, a negative number representing a relative offset from the end, 

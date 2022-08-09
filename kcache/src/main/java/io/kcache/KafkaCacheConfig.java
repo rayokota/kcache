@@ -185,7 +185,7 @@ public class KafkaCacheConfig extends AbstractConfig {
     protected static final String KAFKACACHE_CLIENT_ID_DOC =
         "Use this setting to override the client.id for the Kafka cache consumer.";
     protected static final String KAFKACACHE_TOPIC_DOC =
-        "The durable single partition topic that acts as the durable log for the data.";
+        "The topic that acts as the durable log for the data.";
     protected static final String KAFKACACHE_TOPIC_REPLICATION_FACTOR_DOC =
         "The desired replication factor of the topic. The actual replication factor "
             + "will be the smaller of this value and the number of live Kafka brokers.";

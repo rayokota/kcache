@@ -70,7 +70,6 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.topic.replication.factor` - The desired replication factor for the compacted topic.  Defaults to 3.
 - `kafkacache.topic.num.partitions` - The desired number of partitions for for the compacted topic.  Defaults to 1.
 - `kafkacache.topic.partitions` - A list of partitions to consume, or all partitions if not specified.
-- `kafkacache.topic.partitions` - A list of partitions to consume, or all partitions if not specified.
 - `kafkacache.topic.partitions.offset` - The offset to start consuming all partitions from, one of `beginning`, `end`, 
    a positive number representing an absolute offset, a negative number representing a relative offset from the end, 
    or `@<value>`, where `<value>` is a timestamp in ms.  Defaults to `beginning`.

@@ -130,6 +130,10 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.data.dir</code>
      */
     public static final String KAFKACACHE_DATA_DIR_CONFIG = "kafkacache.data.dir";
+    /**
+     * <code>kafkacache.checkpoint.before.init</code>
+     */
+    public static final String KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG = "kafkacache.checkpoint.before.init";
 
     public static final String KAFKACACHE_SECURITY_PROTOCOL_CONFIG =
         "kafkacache.security.protocol";
@@ -223,6 +227,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "For persistent backing caches, the version of the checkpoint offset file.";
     protected static final String KAFKACACHE_DATA_DIR_DOC =
         "For persistent backing caches, the directory in which to store data.";
+    protected static final String KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC =
+        "For persistent backing caches, whether to commit checkpoints before initialization is complete.";
 
     protected static final String KAFKACACHE_SECURITY_PROTOCOL_DOC =
         "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
@@ -342,6 +348,9 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_DATA_DIR_CONFIG, ConfigDef.Type.STRING, "/tmp",
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_DATA_DIR_DOC
+            )
+            .define(KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG, ConfigDef.Type.BOOLEAN, false,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING,
                 DEFAULT_KAFKACACHE_GROUP_ID_PREFIX + "-" + getDefaultHost(),

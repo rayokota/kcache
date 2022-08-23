@@ -1064,7 +1064,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                if (localCache.isPersistent() && initialized.get()) {
+                if (localCache.isPersistent() &&
+                    (config.getBoolean(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC) || initialized.get())) {
                     try {
                         localCache.flush();
                         Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(count);

@@ -114,6 +114,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private long pollTimeout;
     private String checkpointDir;
     private int checkpointVersion;
+    private boolean checkpointBeforeInit;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
     private Partitioner partitioner;
@@ -182,6 +183,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.pollTimeout = config.getLong(KafkaCacheConfig.KAFKACACHE_POLL_TIMEOUT_CONFIG);
         this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
         this.checkpointVersion = config.getInt(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_VERSION_CONFIG);
+        this.checkpointBeforeInit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG);
         this.cacheUpdateHandler =
             cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
@@ -1064,8 +1066,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                if (localCache.isPersistent() &&
-                    (config.getBoolean(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC) || initialized.get())) {
+                if (localCache.isPersistent() && (checkpointBeforeInit || initialized.get())) {
                     try {
                         localCache.flush();
                         Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(count);

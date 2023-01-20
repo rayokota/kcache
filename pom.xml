@@ -59,7 +59,7 @@
         <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.2</lmdb.version>
         <mapdb.version>3.0.8</mapdb.version>
-        <rocksdb.version>7.8.3</rocksdb.version>
+        <rocksdb.version>7.9.2</rocksdb.version>
         <scala.version>2.13.10</scala.version>
         <sl4j.version>2.0.6</sl4j.version>
     </properties>

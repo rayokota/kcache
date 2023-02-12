@@ -68,6 +68,8 @@ public class RdbmsCache<K, V> extends PersistentCache<K, V> {
     private String password;
     private DataSource ds;
 
+    private final Set<KeyValueIterator<K, V>> openIterators = ConcurrentHashMap.newKeySet();
+
     public RdbmsCache(final String name,
                       final String rootDir,
                       Serde<K> keySerde,

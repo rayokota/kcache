@@ -53,7 +53,7 @@
         <hikari.version>4.0.3</hikari.version>
         <jooq.version>3.14.11</jooq.version>
         <junit.version>4.13.2</junit.version>
-        <kafka.version>3.3.1</kafka.version>
+        <kafka.version>3.4.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <kryo.version>5.4.0</kryo.version>
         <bdbje.version>18.3.12</bdbje.version>

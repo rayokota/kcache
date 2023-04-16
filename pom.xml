@@ -50,15 +50,15 @@
         <bouncycastle.version>1.70</bouncycastle.version>
         <caffeine.version>2.9.3</caffeine.version>
         <guava.version>31.1-jre</guava.version>
-        <hikari.version>4.0.3</hikari.version>
-        <jooq.version>3.14.11</jooq.version>
+        <hikari.version>5.0.1</hikari.version>
+        <jooq.version>3.16.18</jooq.version>
         <junit.version>4.13.2</junit.version>
         <kafka.version>3.4.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>
         <kryo.version>5.4.0</kryo.version>
         <bdbje.version>18.3.12</bdbje.version>
         <lmdb.version>0.8.3</lmdb.version>
-        <mapdb.version>3.0.8</mapdb.version>
+        <mapdb.version>3.0.9</mapdb.version>
         <rocksdb.version>8.0.0</rocksdb.version>
         <scala.version>2.13.10</scala.version>
         <sl4j.version>2.0.7</sl4j.version>

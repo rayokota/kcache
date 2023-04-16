@@ -21,9 +21,11 @@ Releases of KCache are deployed to Maven Central.
 <dependency>
     <groupId>io.kcache</groupId>
     <artifactId>kcache</artifactId>
-    <version>4.0.10</version>
+    <version>5.0.0</version>
 </dependency>
 ```
+
+For Java 11 or above, use `5.x` otherwise use `4.x`.
 
 ## Usage
 

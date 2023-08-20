@@ -18,6 +18,7 @@ package io.kcache;
 
 import java.util.Map;
 import java.util.Optional;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Closeable;
@@ -25,12 +26,18 @@ import java.io.IOException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
 
-public interface CacheUpdateHandler<K, V> extends Closeable {
+public interface CacheUpdateHandler<K, V> extends Configurable, Closeable {
 
     enum ValidationStatus {
         SUCCESS,
         ROLLBACK_FAILURE,
         IGNORE_FAILURE
+    }
+
+    /**
+     * Configures the cache update handler.
+     */
+    default void configure(Map<String, ?> configs) {
     }
 
     /**

@@ -17,7 +17,6 @@
 package io.kcache.rocksdb;
 
 import org.rocksdb.AbstractComparator;
-import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyOptions;
@@ -605,17 +604,6 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public Options setAccessHintOnCompactionStart(final AccessHint accessHint) {
-        dbOptions.setAccessHintOnCompactionStart(accessHint);
-        return this;
-    }
-
-    @Override
-    public AccessHint accessHintOnCompactionStart() {
-        return dbOptions.accessHintOnCompactionStart();
-    }
-
-    @Override
     public Options setCompactionReadaheadSize(final long compactionReadaheadSize) {
         dbOptions.setCompactionReadaheadSize(compactionReadaheadSize);
         return this;
@@ -855,12 +843,6 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     @Override
     public Options setSstFileManager(final SstFileManager sstFileManager) {
         dbOptions.setSstFileManager(sstFileManager);
-        return this;
-    }
-
-    @Override
-    public Options setLogger(final Logger logger) {
-        dbOptions.setLogger(logger);
         return this;
     }
 

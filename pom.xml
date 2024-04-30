@@ -60,7 +60,7 @@
         <lmdb.version>0.9.0</lmdb.version>
         <mapdb.version>3.0.10</mapdb.version>
         <rocksdb.version>9.1.1</rocksdb.version>
-        <scala.version>2.13.13</scala.version>
+        <scala.version>2.13.14</scala.version>
         <sl4j.version>2.0.13</sl4j.version>
     </properties>
 

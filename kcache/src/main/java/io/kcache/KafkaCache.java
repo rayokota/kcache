@@ -308,7 +308,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (IOException e) {
             throw new CacheInitializationException("Failed to read to end offsets", e);
         }
-        Map<TopicPartition, Long> checkpoint = new HashMap<>(checkpointFileCache);
+        Map<TopicPartition, Long> checkpoints = new HashMap<>(checkpointFileCache);
         this.kafkaTopicReader.start();
 
         boolean isInitialized = initialized.compareAndSet(false, true);
@@ -316,7 +316,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        cacheUpdateHandler.cacheInitialized(count, checkpoint);
+        cacheUpdateHandler.cacheInitialized(count, checkpoints);
     }
 
     @Override

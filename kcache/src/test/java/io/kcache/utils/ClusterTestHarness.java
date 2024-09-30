@@ -86,7 +86,7 @@ public abstract class ClusterTestHarness {
                     servers.get(i).boundPort(listenerType)
                 );
         }
-        bootstrapServers = Utils.join(serverUrls, ",");
+        bootstrapServers = String.join(",", serverUrls);
     }
 
     protected void injectProperties(Properties props) {

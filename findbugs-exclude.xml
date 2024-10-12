@@ -5,6 +5,10 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
     <Match>
+        <Class name="io.kcache.bdbje.SerdeWrapper"/>
+        <Bug pattern="MC_OVERRIDABLE_METHOD_CALL_IN_READ_OBJECT"/>
+    </Match>
+    <Match>
         <Class name="io.kcache.utils.EnumRecommender"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>

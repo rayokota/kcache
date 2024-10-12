@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FindBugsFilter>
     <Match>
+        <Class name="io.kcache.CompositeCacheUpdateHandler"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
         <Class name="io.kcache.utils.EnumRecommender"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
@@ -23,6 +27,9 @@
     <Match>
         <Class name="io.kcache.benchmark.PersistentCacheBenchmark"/>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Match>
     <!-- exclude generated code -->
     <Match>

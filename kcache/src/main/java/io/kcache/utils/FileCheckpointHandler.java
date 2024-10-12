@@ -17,7 +17,6 @@
 package io.kcache.utils;
 
 import io.kcache.CheckpointHandler;
-import io.kcache.KafkaCache;
 import io.kcache.KafkaCacheConfig;
 import io.kcache.exceptions.CacheInitializationException;
 import java.io.IOException;
@@ -29,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 public class FileCheckpointHandler implements CheckpointHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(KafkaCache.class);
+    private static final Logger log = LoggerFactory.getLogger(FileCheckpointHandler.class);
 
     private String topic;
     private String checkpointDir;

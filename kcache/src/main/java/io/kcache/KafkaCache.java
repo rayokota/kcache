@@ -25,7 +25,6 @@ import io.kcache.exceptions.EntryTooLargeException;
 import io.kcache.utils.InMemoryBoundedCache;
 import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.ShutdownableThread;
-import io.kcache.utils.OffsetCheckpoint;
 import java.lang.reflect.Constructor;
 import java.util.ArrayDeque;
 import java.util.Objects;
@@ -112,17 +111,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private int initTimeout;
     private int timeout;
     private long pollTimeout;
-    private String checkpointDir;
-    private int checkpointVersion;
     private boolean checkpointBeforeInit;
+    private CheckpointHandler checkpointHandler;
     private String bootstrapBrokers;
     private Producer<byte[], byte[]> producer;
     private Partitioner partitioner;
     private Consumer<byte[], byte[]> consumer;
     private WorkerThread kafkaTopicReader;
     private KafkaCacheConfig config;
-    private OffsetCheckpoint checkpointFile;
-    private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
     private final Queue<CompletableFuture<Integer>> syncCallbacks = new ArrayDeque<>();
 
@@ -181,9 +177,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         this.initTimeout = config.getInt(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG);
         this.timeout = config.getInt(KafkaCacheConfig.KAFKACACHE_TIMEOUT_CONFIG);
         this.pollTimeout = config.getLong(KafkaCacheConfig.KAFKACACHE_POLL_TIMEOUT_CONFIG);
-        this.checkpointDir = config.getString(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_DIR_CONFIG);
-        this.checkpointVersion = config.getInt(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_VERSION_CONFIG);
         this.checkpointBeforeInit = config.getBoolean(KafkaCacheConfig.KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG);
+        this.checkpointHandler = config.checkpointHandler();
         this.cacheUpdateHandler =
             cacheUpdateHandler != null ? cacheUpdateHandler : (key, value, oldValue, tp, offset, ts) -> {};
         this.keySerde = keySerde;
@@ -275,12 +270,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         if (localCache.isPersistent()) {
-            try {
-                checkpointFile = new OffsetCheckpoint(checkpointDir, checkpointVersion, topic);
-                checkpointFileCache.putAll(checkpointFile.read());
-            } catch (IOException e) {
-                throw new CacheInitializationException("Failed to read checkpoints", e);
-            }
+            checkpointHandler.init();
             log.info("Successfully read checkpoints");
         }
         localCache.init();
@@ -308,7 +298,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (IOException e) {
             throw new CacheInitializationException("Failed to read to end offsets", e);
         }
-        Map<TopicPartition, Long> checkpoints = new HashMap<>(checkpointFileCache);
+        Map<TopicPartition, Long> checkpoints = checkpointHandler.checkpoints();
         this.kafkaTopicReader.start();
 
         boolean isInitialized = initialized.compareAndSet(false, true);
@@ -336,7 +326,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             count = waitUntilEndOffsets();
         }
         localCache.sync();
-        cacheUpdateHandler.cacheSynchronized(count, new HashMap<>(checkpointFileCache));
+        Map<TopicPartition, Long> checkpoints = checkpointHandler.checkpoints();
+        cacheUpdateHandler.cacheSynchronized(count, checkpoints);
     }
 
     private int waitUntilEndOffsets() throws CacheException {
@@ -780,9 +771,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         localCache.close();
-        if (checkpointFile != null) {
-            checkpointFile.close();
-        }
+        checkpointHandler.close();
         cacheUpdateHandler.close();
         log.info("Kafka cache shut down complete for {}", clientId);
     }
@@ -860,8 +849,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             consumer.assign(topicPartitions);
 
             if (localCache.isPersistent()) {
+                Map<TopicPartition, Long> checkpoints = checkpointHandler.checkpoints();
                 for (final TopicPartition topicPartition : topicPartitions) {
-                    final Long checkpoint = checkpointFileCache.get(topicPartition);
+                    final Long checkpoint = checkpoints.get(topicPartition);
                     if (checkpoint != null) {
                         log.info("Seeking to checkpoint {} for {}", checkpoint, topicPartition);
                         consumer.seek(topicPartition, checkpoint);
@@ -1106,11 +1096,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 ? offsets
                 : lastReadOffsets.entrySet().stream()
                     .collect(Collectors.toMap(e -> new TopicPartition(topic, e.getKey()), e -> e.getValue() + 1));
-            checkpointFileCache.putAll(newOffsets);
             try {
-                checkpointFile.write(checkpointFileCache);
+                checkpointHandler.updateCheckpoints(newOffsets);
             } catch (final IOException e) {
-                log.warn("Failed to write offset checkpoint file to {}: {}", checkpointFile, e);
+                log.warn("Failed to write offset checkpoints", e);
             }
         }
 

@@ -17,6 +17,7 @@
 package io.kcache;
 
 import io.kcache.utils.EnumRecommender;
+import io.kcache.utils.FileCheckpointHandler;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.EnumSet;
@@ -134,6 +135,11 @@ public class KafkaCacheConfig extends AbstractConfig {
      * <code>kafkacache.checkpoint.before.init</code>
      */
     public static final String KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG = "kafkacache.checkpoint.before.init";
+    /**
+     * <code>kafkacache.checkpoint.handler</code>
+     */
+    public static final String KAFKACACHE_CHECKPOINT_HANDLER_CONFIG = "kafkacache.checkpoint.handler";
+    public static final String DEFAULT_KAFKACACHE_CHECKPOINT_HANDLER = FileCheckpointHandler.class.getName();
 
     public static final String KAFKACACHE_SECURITY_PROTOCOL_CONFIG =
         "kafkacache.security.protocol";
@@ -229,6 +235,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "For persistent backing caches, the directory in which to store data.";
     protected static final String KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC =
         "For persistent backing caches, whether to commit checkpoints before initialization is complete.";
+    protected static final String KAFKACACHE_CHECKPOINT_HANDLER_DOC =
+        "For persistent backing caches, the checkpoint handler.  Defaults to FileCheckpointHandler.";
 
     protected static final String KAFKACACHE_SECURITY_PROTOCOL_DOC =
         "The security protocol to use when connecting with Kafka, the underlying persistent storage. "
@@ -351,6 +359,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_CHECKPOINT_BEFORE_INIT_CONFIG, ConfigDef.Type.BOOLEAN, false,
                 ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_BEFORE_INIT_DOC
+            )
+            .define(KAFKACACHE_CHECKPOINT_HANDLER_CONFIG, ConfigDef.Type.CLASS,
+                DEFAULT_KAFKACACHE_CHECKPOINT_HANDLER,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CHECKPOINT_HANDLER_DOC
             )
             .define(KAFKACACHE_GROUP_ID_CONFIG, ConfigDef.Type.STRING,
                 DEFAULT_KAFKACACHE_GROUP_ID_PREFIX + "-" + getDefaultHost(),
@@ -511,6 +523,11 @@ public class KafkaCacheConfig extends AbstractConfig {
 
     public Offset offset() {
         return new Offset(getString(KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG));
+    }
+
+    public CheckpointHandler checkpointHandler() {
+        return this.getConfiguredInstance(KAFKACACHE_CHECKPOINT_HANDLER_CONFIG,
+            CheckpointHandler.class);
     }
 
     public static Properties getPropsFromFile(String propsFile) throws ConfigException {

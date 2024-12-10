@@ -51,7 +51,7 @@
         <caffeine.version>2.9.3</caffeine.version>
         <guava.version>33.3.1-jre</guava.version>
         <hikari.version>6.0.0</hikari.version>
-        <jooq.version>3.16.18</jooq.version>
+        <jooq.version>3.19.16</jooq.version>
         <junit.version>4.13.2</junit.version>
         <kafka.version>3.8.0</kafka.version>
         <kafka.scala.version>2.13</kafka.scala.version>

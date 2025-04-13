@@ -318,9 +318,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
-        if (!initialized.get()) {
-            return;
-        }
         int count = -1;
         if (kafkaTopicReader != null) {
             count = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
@@ -372,7 +369,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
 
         return producerProps;
     }

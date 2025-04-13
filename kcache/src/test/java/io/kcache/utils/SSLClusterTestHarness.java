@@ -18,7 +18,7 @@ package io.kcache.utils;
 
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestSslUtils;
 import scala.Option;
@@ -60,7 +60,7 @@ public class SSLClusterTestHarness extends ClusterTestHarness {
         // needs to be added to the broker's trust store.
         Map<String, Object> sslConfigs;
         try {
-            this.clientSslConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT,
+            this.clientSslConfigs = TestSslUtils.createSslConfig(true, true, ConnectionMode.CLIENT,
                 trustStoreFile, "client", "localhost");
         } catch (Exception e) {
             throw new RuntimeException(e);

@@ -79,6 +79,10 @@ KCache has a number of configuration properties that can be specified.
 - `kafkacache.timeout.ms` - The timeout for an operation on the Kafka cache.  Defaults to 60 seconds.
 - `kafkacache.backing.cache` - The backing cache for KCache, one of `memory` (default), `bdbje`, `caffeine`, `lmdb`, `mapdb`, `rdbms`, or `rocksdb`.
 - `kafkacache.data.dir` - The root directory for backing cache storage.  Defaults to `/tmp`.
+- `kafkacache.topic.max.message.bytes` - The maximum size of a message that can be stored in a single Kafka topic record (in bytes). Default is 1 MB.
+- `kafkacache.producer.max.request.size` - The maximum size of a request that the Kafka producer can send (in bytes). Default is 2 MB.
+- `kafkacache.consumer.fetch.max.bytes` - The maximum amount of data the Kafka consumer will fetch in a single request (in bytes). Default is 50 MB.
+- `kafkacache.consumer.max.partition.fetch.bytes` - The maximum amount of data per partition the Kafka consumer will fetch in a single request (in bytes). Default is 2 MB.
 
 Configuration properties can be passed as follows:
 

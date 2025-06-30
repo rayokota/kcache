@@ -35,6 +35,7 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -358,7 +359,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-
+        consumerProps.put(
+            ConsumerConfig.FETCH_MAX_BYTES_CONFIG,
+            config.getInt(KafkaCacheConfig.KAFKACACHE_CONSUMER_FETCH_MAX_BYTES_CONFIG)
+        );
+        consumerProps.put(
+            ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG,
+            config.getInt(KafkaCacheConfig.KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES_CONFIG)
+        );
         return consumerProps;
     }
 
@@ -371,7 +379,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // Producer should not retry
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
-
+        producerProps.put(
+            ProducerConfig.MAX_REQUEST_SIZE_CONFIG,
+            config.getInt(KafkaCacheConfig.KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE_CONFIG)
+        );
         return producerProps;
     }
 
@@ -432,6 +443,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         topicConfigs.put(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.CLEANUP_POLICY_COMPACT
+        );
+        topicConfigs.put(
+            TopicConfig.MAX_MESSAGE_BYTES_CONFIG,
+            String.valueOf(config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_CONFIG))
         );
         topicRequest.configs(topicConfigs);
         try {
@@ -503,6 +518,49 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } else {
                 log.warn(message);
             }
+        }
+    }
+
+    /**
+     * Update a topic configuration key to a new value.
+     */
+    protected void updateTopicConfig(AdminClient admin, String key, String value) throws ExecutionException, InterruptedException, TimeoutException {
+        ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        ConfigEntry entry = new ConfigEntry(key, value);
+        Config config = new Config(Collections.singleton(entry));
+        admin.alterConfigs(Collections.singletonMap(topicResource, config)).all().get(initTimeout, TimeUnit.MILLISECONDS);
+        log.info("Updated topic config {} to {} for topic {}", key, value, topic);
+    }
+
+    /**
+     * Validate and update the topic's max.message.bytes if needed.
+     */
+    protected void validateAndUpdateTopicMaxMessageSize(AdminClient admin) throws ExecutionException, InterruptedException, TimeoutException {
+        ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        Map<ConfigResource, Config> configs = admin.describeConfigs(Collections.singleton(topicResource)).all().get(initTimeout, TimeUnit.MILLISECONDS);
+        Config topicConfig = configs.get(topicResource);
+        String currentValue = topicConfig.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG) != null ? topicConfig.get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG).value() : null;
+        int desiredValue = config.getInt(KafkaCacheConfig.KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_CONFIG);
+        boolean needsUpdate = false;
+        if (currentValue == null) {
+            log.warn("Topic {} does not have max.message.bytes config. Updating to {}", topic, desiredValue);
+            needsUpdate = true;
+        } else {
+            try {
+                int currentInt = Integer.parseInt(currentValue);
+                if (currentInt != desiredValue) {
+                    needsUpdate = true;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Could not parse current max.message.bytes value: {}", currentValue);
+                needsUpdate = true;
+            }
+        }
+        if (needsUpdate) {
+            updateTopicConfig(admin, TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(desiredValue));
+            log.info("Updated topic config max.message.bytes to {} for topic {}", desiredValue, topic);
+        } else {
+            log.info("Topic {} already has max.message.bytes >= {}", topic, desiredValue);
         }
     }
 

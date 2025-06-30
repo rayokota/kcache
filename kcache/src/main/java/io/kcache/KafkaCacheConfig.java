@@ -138,6 +138,28 @@ public class KafkaCacheConfig extends AbstractConfig {
     /**
      * <code>kafkacache.checkpoint.handler</code>
      */
+    /**
+     * <code>kafkacache.topic.max.message.bytes</code>
+     */
+    public static final String KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_CONFIG = "kafkacache.topic.max.message.bytes";
+    public static final int DEFAULT_KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES = 1048576; // 1 MB
+    /**
+     * <code>kafkacache.producer.max.request.size</code>
+     */
+    public static final String KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE_CONFIG = "kafkacache.producer.max.request.size";
+    public static final int DEFAULT_KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE = 2*1048576; // 2 MB
+    /**
+     * <code>kafkacache.consumer.fetch.max.bytes</code>
+     */
+    public static final String KAFKACACHE_CONSUMER_FETCH_MAX_BYTES_CONFIG = "kafkacache.consumer.fetch.max.bytes";
+    public static final int DEFAULT_KAFKACACHE_CONSUMER_FETCH_MAX_BYTES = 52428800; // 50 MB
+    /**
+     * <code>kafkacache.consumer.max.partition.fetch.bytes</code>
+     */
+    public static final String KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES_CONFIG = "kafkacache.consumer.max.partition.fetch.bytes";
+    public static final int DEFAULT_KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES = 2*1048576; // 2 MB
+
+
     public static final String KAFKACACHE_CHECKPOINT_HANDLER_CONFIG = "kafkacache.checkpoint.handler";
     public static final String DEFAULT_KAFKACACHE_CHECKPOINT_HANDLER = FileCheckpointHandler.class.getName();
 
@@ -288,6 +310,15 @@ public class KafkaCacheConfig extends AbstractConfig {
         "Login thread will sleep until the specified window factor of time from last refresh to "
             + "ticket's expiry has "
             + "been reached, at which time it will try to renew the ticket.";
+
+    protected static final String KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_DOC =
+        "The maximum size of a message that can be stored in a single Kafka topic record (in bytes). Default is 1 MB.";
+    protected static final String KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE_DOC =
+        "The maximum size of a request that the Kafka producer can send (in bytes). Default is 2 MB.";
+    protected static final String KAFKACACHE_CONSUMER_FETCH_MAX_BYTES_DOC =
+        "The maximum amount of data the Kafka consumer will fetch in a single request (in bytes). Default is 50 MB.";
+    protected static final String KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES_DOC =
+        "The maximum amount of data per partition the Kafka consumer will fetch in a single request (in bytes). Default is 2 MB.";
 
     private static final ConfigDef config;
 
@@ -458,6 +489,22 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, ConfigDef.Type.DOUBLE,
                 0.8, ConfigDef.Importance.LOW,
                 KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
+            )
+            .define(KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_DOC
+            )
+            .define(KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_PRODUCER_MAX_REQUEST_SIZE_DOC
+            )
+            .define(KAFKACACHE_CONSUMER_FETCH_MAX_BYTES_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKACACHE_CONSUMER_FETCH_MAX_BYTES,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CONSUMER_FETCH_MAX_BYTES_DOC
+            )
+            .define(KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES_CONFIG, ConfigDef.Type.INT,
+                DEFAULT_KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES,
+                ConfigDef.Importance.MEDIUM, KAFKACACHE_CONSUMER_MAX_PARTITION_FETCH_BYTES_DOC
             );
     }
 

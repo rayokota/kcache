@@ -324,6 +324,44 @@ public class KafkaCacheTest extends ClusterTestHarness {
         assertEquals(Collections.singleton("Rocks"), CustomPartitioner.values);
     }
 
+    @Test
+    public void testValidateAndUpdateTopicMaxMessageSize() throws Exception {
+        // Step 1: Set up KafkaCache config with 4MB
+        Properties kafkaCacheProps = getKafkaCacheProperties();
+        kafkaCacheProps.put(KafkaCacheConfig.KAFKACACHE_TOPIC_MAX_MESSAGE_BYTES_CONFIG, String.valueOf(4 * 1048576)); // 4MB
+        KafkaCache<String, String> kafkaCache = new KafkaCache<>(new KafkaCacheConfig(kafkaCacheProps), null, null);
+        kafkaCache.init();
+
+        Properties adminProps = new Properties();
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        try (AdminClient admin = AdminClient.create(adminProps)) {
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, KafkaCacheConfig.DEFAULT_KAFKACACHE_TOPIC);
+
+            // Step 2: Manually set the topic's max.message.bytes to 1MB
+            admin.alterConfigs(Collections.singletonMap(
+                topicResource,
+                new org.apache.kafka.clients.admin.Config(Collections.singleton(
+                    new org.apache.kafka.clients.admin.ConfigEntry("max.message.bytes", "1048576")
+                ))
+            )).all().get(60, TimeUnit.SECONDS);
+
+            // Verify initial value is 1MB
+            Config configBefore = admin.describeConfigs(Collections.singleton(topicResource))
+                .all().get(60, TimeUnit.SECONDS).get(topicResource);
+            assertEquals("1048576", configBefore.get("max.message.bytes").value());
+
+            // Step 3: Call validateAndUpdateTopicMaxMessageSize on the instance
+            kafkaCache.validateAndUpdateTopicMaxMessageSize(admin);
+
+            // Step 4: Verify the topic config is updated to 4MB
+            Config configAfter = admin.describeConfigs(Collections.singleton(topicResource))
+                .all().get(60, TimeUnit.SECONDS).get(topicResource);
+            assertEquals(String.valueOf(4 * 1048576), configAfter.get("max.message.bytes").value());
+        } finally {
+            kafkaCache.close();
+        }
+    }
+
     protected Cache<String, String> createAndInitKafkaCacheInstance() throws Exception {
         Properties props = getKafkaCacheProperties();
         return CacheUtils.createAndInitKafkaCacheInstance(props);

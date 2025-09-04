@@ -10,6 +10,7 @@
     <groupId>io.kcache</groupId>
     <artifactId>kcache-mapdb</artifactId>
     <packaging>jar</packaging>
+    <name>kcache-mapdb</name>
 
     <dependencies>
         <dependency>

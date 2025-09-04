@@ -10,6 +10,7 @@
     <groupId>io.kcache</groupId>
     <artifactId>kcache-bdbje</artifactId>
     <packaging>jar</packaging>
+    <name>kcache-bdbje</name>
 
     <dependencies>
         <dependency>

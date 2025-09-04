@@ -10,6 +10,7 @@
     <groupId>io.kcache</groupId>
     <artifactId>kcache-caffeine</artifactId>
     <packaging>jar</packaging>
+    <name>kcache-caffeine</name>
 
     <dependencies>
         <dependency>

@@ -10,6 +10,7 @@
     <groupId>io.kcache</groupId>
     <artifactId>kcache-benchmark</artifactId>
     <packaging>jar</packaging>
+    <name>kcache-benchmark</name>
 
     <properties>
         <jmh.version>1.37</jmh.version>

@@ -10,6 +10,7 @@
     <groupId>io.kcache</groupId>
     <artifactId>kcache-lmdb</artifactId>
     <packaging>jar</packaging>
+    <name>kcache-lmdb</name>
 
     <dependencies>
         <dependency>

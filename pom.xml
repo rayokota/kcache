@@ -5,8 +5,8 @@
     <artifactId>kcache-parent</artifactId>
     <version>5.2.2-SNAPSHOT</version>
     <packaging>pom</packaging>
+    <name>kcache-parent</name>
 
-    <name>kcache</name>
     <description>A in-memory cache backed by Apache Kafka</description>
     <url>https://github.com/rayokota/kcache</url>
     <licenses>

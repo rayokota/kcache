@@ -324,8 +324,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         try {
             waitForInit();
         } catch (InterruptedException e) {
-            throw new CacheInitializationException(
-                "Failed to synchronize cache",
+            throw new CacheException(
+                "Sync operation interrupted while waiting for cache initialization",
                 e
             );
         }

@@ -80,6 +80,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -105,6 +106,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
+    private final CountDownLatch initLatch = new CountDownLatch(1);
     private boolean skipValidation;
     private boolean requireCompact;
     private boolean readOnly;
@@ -307,6 +309,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 + ". Cache was already initialized");
         }
         cacheUpdateHandler.cacheInitialized(count, checkpoints);
+        initLatch.countDown();
     }
 
     @Override
@@ -318,6 +321,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void sync() {
+        try {
+            waitForInit();
+        } catch (InterruptedException e) {
+            throw new CacheInitializationException(
+                "Failed to synchronize cache",
+                e
+            );
+        }
+
         int count = -1;
         if (kafkaTopicReader != null) {
             count = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
@@ -780,6 +792,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     public void destroy() throws IOException {
         localCache.destroy();
         cacheUpdateHandler.cacheDestroyed();
+    }
+
+    public void waitForInit() throws InterruptedException {
+        if (initLatch.getCount() > 0) {
+            initLatch.await();
+        }
     }
 
     private void assertInitialized() throws CacheException {

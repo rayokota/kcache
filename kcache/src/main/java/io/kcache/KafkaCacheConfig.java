@@ -186,7 +186,7 @@ public class KafkaCacheConfig extends AbstractConfig {
     public static final String KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
         "kafkacache.sasl.kerberos.ticket.renew.window.factor";
     public static final String KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS =
-        "kafkacache.sasl.client.callback.handler.class ";
+        "kafkacache.sasl.client.callback.handler.class";
 
 
     protected static final String KAFKACACHE_BOOTSTRAP_SERVERS_DOC =

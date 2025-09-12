@@ -185,6 +185,8 @@ public class KafkaCacheConfig extends AbstractConfig {
         "kafkacache.sasl.kerberos.ticket.renew.jitter";
     public static final String KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG =
         "kafkacache.sasl.kerberos.ticket.renew.window.factor";
+    public static final String KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS =
+        "kafkacache.sasl.client.callback.handler.class ";
 
 
     protected static final String KAFKACACHE_BOOTSTRAP_SERVERS_DOC =
@@ -288,6 +290,9 @@ public class KafkaCacheConfig extends AbstractConfig {
         "Login thread will sleep until the specified window factor of time from last refresh to "
             + "ticket's expiry has "
             + "been reached, at which time it will try to renew the ticket.";
+    protected static final String KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC =
+        "The fully qualified name of a SASL client callback handler class that implements " +
+            "the AuthenticateCallbackHandler interface.";
 
     private static final ConfigDef config;
 
@@ -458,7 +463,10 @@ public class KafkaCacheConfig extends AbstractConfig {
             .define(KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG, ConfigDef.Type.DOUBLE,
                 0.8, ConfigDef.Importance.LOW,
                 KAFKACACHE_SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_DOC
-            );
+            )
+            .define(KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS, ConfigDef.Type.CLASS,
+                null, ConfigDef.Importance.MEDIUM,
+                KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC);
     }
 
     public KafkaCacheConfig(String propsFile) {

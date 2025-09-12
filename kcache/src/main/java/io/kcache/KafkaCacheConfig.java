@@ -291,8 +291,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             + "ticket's expiry has "
             + "been reached, at which time it will try to renew the ticket.";
     protected static final String KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC =
-        "The fully qualified name of a SASL client callback handler class that implements " +
-            "the AuthenticateCallbackHandler interface.";
+        "The fully qualified name of a SASL client callback handler class that implements "
+            + "the AuthenticateCallbackHandler interface.";
 
     private static final ConfigDef config;
 

@@ -466,7 +466,8 @@ public class KafkaCacheConfig extends AbstractConfig {
             )
             .define(KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS, ConfigDef.Type.CLASS,
                 null, ConfigDef.Importance.MEDIUM,
-                KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC);
+                KAFKACACHE_SASL_CLIENT_CALLBACK_HANDLER_CLASS_DOC
+            );
     }
 
     public KafkaCacheConfig(String propsFile) {

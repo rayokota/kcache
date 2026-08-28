@@ -71,6 +71,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -572,8 +573,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (flush) {
                 producer.flush();
             }
-            // Return last ack
-            return ack;
+            return Collections.singletonList(ack);
         });
 
         return new Metadata<>(recordMetadata, oldValue);
@@ -599,7 +599,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         return doPut(() -> {
-            Future<RecordMetadata> ack = null;
+            List<Future<RecordMetadata>> acks = new ArrayList<>(entries.size());
             for (Map.Entry<? extends K, ? extends V> entry : entries.entrySet()) {
                 K key = entry.getKey();
                 V value = entry.getValue();
@@ -607,30 +607,47 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // write to the Kafka topic
                 ProducerRecord<byte[], byte[]> producerRecord = toRecord(headers, key, value);
                 log.trace("Sending record to Kafka cache topic: {}", producerRecord);
-                ack = producer.send(producerRecord);
+                acks.add(producer.send(producerRecord));
             }
             if (flush) {
                 producer.flush();
             }
-            // Return last ack
-            return ack;
+            return acks;
         });
     }
 
-    private RecordMetadata doPut(Supplier<Future<RecordMetadata>> ackSupplier) {
-        RecordMetadata recordMetadata;
-        Integer lastWrittenPartition = null;
-        Long previousWrittenOffset = null;
+    private RecordMetadata doPut(Supplier<List<Future<RecordMetadata>>> acksSupplier) {
+        RecordMetadata recordMetadata = null;
+        // The offsets that this call recorded in lastWrittenOffsets, mapped to the values they
+        // replaced, so that they can be rolled back if the write is not known to have succeeded.
+        // A null value indicates that there was no previous offset for that partition.
+        Map<Integer, Long> replacedWrittenOffsets = new HashMap<>();
         boolean knownSuccessfulWrite = false;
         try {
-            Future<RecordMetadata> ack = ackSupplier.get();
-            recordMetadata = ack.get(timeout, TimeUnit.MILLISECONDS);
+            List<Future<RecordMetadata>> acks = acksSupplier.get();
 
-            log.trace("Waiting for the local cache to catch up to offset {}", recordMetadata.offset());
-            lastWrittenPartition = recordMetadata.partition();
-            long lastWrittenOffset = recordMetadata.offset();
-            previousWrittenOffset = lastWrittenOffsets.put(lastWrittenPartition, lastWrittenOffset);
-            kafkaTopicReader.waitUntilOffset(lastWrittenPartition, lastWrittenOffset, Duration.ofMillis(timeout));
+            // Wait for an ack for every record, so that a record that fails is not masked by a
+            // later one that succeeds.  The acks are awaited concurrently, so they share a
+            // single timeout budget.
+            Map<Integer, Long> writtenOffsets = new HashMap<>();
+            long ackDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeout);
+            for (Future<RecordMetadata> ack : acks) {
+                recordMetadata = ack.get(remainingNanos(ackDeadline), TimeUnit.NANOSECONDS);
+                writtenOffsets.merge(recordMetadata.partition(), recordMetadata.offset(), Math::max);
+            }
+
+            log.trace("Waiting for the local cache to catch up to offsets {}", writtenOffsets);
+            for (Map.Entry<Integer, Long> entry : writtenOffsets.entrySet()) {
+                replacedWrittenOffsets.put(
+                    entry.getKey(), lastWrittenOffsets.put(entry.getKey(), entry.getValue()));
+            }
+            // The local cache catches up to all partitions concurrently, so they too share a
+            // single timeout budget.
+            long catchUpDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeout);
+            for (Map.Entry<Integer, Long> entry : writtenOffsets.entrySet()) {
+                kafkaTopicReader.waitUntilOffset(entry.getKey(), entry.getValue(),
+                    Duration.ofNanos(remainingNanos(catchUpDeadline)));
+            }
             knownSuccessfulWrite = true;
         } catch (InterruptedException e) {
             throw new CacheException("Put operation interrupted while waiting for an ack from Kafka", e);
@@ -646,15 +663,21 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (KafkaException ke) {
             throw new CacheException("Put operation to Kafka failed", ke);
         } finally {
-            if (!knownSuccessfulWrite && lastWrittenPartition != null) {
-                if (previousWrittenOffset != null) {
-                    lastWrittenOffsets.put(lastWrittenPartition, previousWrittenOffset);
-                } else {
-                    lastWrittenOffsets.remove(lastWrittenPartition);
+            if (!knownSuccessfulWrite) {
+                for (Map.Entry<Integer, Long> entry : replacedWrittenOffsets.entrySet()) {
+                    if (entry.getValue() != null) {
+                        lastWrittenOffsets.put(entry.getKey(), entry.getValue());
+                    } else {
+                        lastWrittenOffsets.remove(entry.getKey());
+                    }
                 }
             }
         }
         return recordMetadata;
+    }
+
+    private static long remainingNanos(long deadlineNanos) {
+        return Math.max(0L, deadlineNanos - System.nanoTime());
     }
 
     private ProducerRecord<byte[], byte[]> toRecord(Headers headers, K key, V value) {

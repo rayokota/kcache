@@ -101,6 +101,28 @@ public class KafkaCacheTest extends ClusterTestHarness {
     }
 
     @Test
+    public void testPutAllAcrossPartitions() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, 3);
+        // This test is about catching up to every partition written to, not about eviction,
+        // so keep the cache unbounded even for subclasses that bound it
+        props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, -1);
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
+            Map<String, String> entries = new HashMap<>();
+            for (int i = 0; i < 100; i++) {
+                entries.put("key" + i, "value" + i);
+            }
+            kafkaCache.putAll(entries);
+            // Every entry must be visible once putAll returns, no matter which partition it
+            // was written to
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                assertEquals("Retrieved value should match entered value",
+                    entry.getValue(), kafkaCache.get(entry.getKey()));
+            }
+        }
+    }
+
+    @Test
     public void testSimpleGetAfterRestart() throws Exception {
         Properties props = getKafkaCacheProperties();
         Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);

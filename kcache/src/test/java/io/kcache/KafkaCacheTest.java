@@ -18,10 +18,12 @@ package io.kcache;
 
 import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.exceptions.EntryTooLargeException;
 import io.kcache.utils.ClusterTestHarness;
 import io.kcache.utils.CustomPartitioner;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,7 @@ import java.io.IOException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class KafkaCacheTest extends ClusterTestHarness {
 
@@ -97,6 +100,49 @@ public class KafkaCacheTest extends ClusterTestHarness {
             assertEquals("Retrieved value should match entered value", value, retrievedValue);
             retrievedValue = kafkaCache.get(key2);
             assertEquals("Retrieved value should match entered value", value2, retrievedValue);
+        }
+    }
+
+    @Test
+    public void testPutAllAcrossPartitions() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_NUM_PARTITIONS_CONFIG, 3);
+        // This test is about catching up to every partition written to, not about eviction,
+        // so keep the cache unbounded even for subclasses that bound it
+        props.put(KafkaCacheConfig.KAFKACACHE_BOUNDED_CACHE_SIZE_CONFIG, -1);
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
+            Map<String, String> entries = new HashMap<>();
+            for (int i = 0; i < 100; i++) {
+                entries.put("key" + i, "value" + i);
+            }
+            kafkaCache.putAll(entries);
+            // Every entry must be visible once putAll returns, no matter which partition it
+            // was written to
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                assertEquals("Retrieved value should match entered value",
+                    entry.getValue(), kafkaCache.get(entry.getKey()));
+            }
+        }
+    }
+
+    @Test
+    public void testPutAllFailsWhenANonFinalRecordFails() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        props.put("kafkacache." + ProducerConfig.MAX_REQUEST_SIZE_CONFIG, 1024);
+        try (Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props)) {
+            // The entry that cannot be sent comes first and a small entry that succeeds comes
+            // last, so the failure is only observed if every ack is awaited rather than the
+            // last one alone
+            Map<String, String> entries = new LinkedHashMap<>();
+            entries.put("tooLarge", "x".repeat(4096));
+            entries.put("small", "value");
+            try {
+                kafkaCache.putAll(entries);
+                fail("Expected putAll to fail because an entry is too large");
+            } catch (EntryTooLargeException e) {
+                // expected
+            }
+            assertNull(kafkaCache.get("tooLarge"));
         }
     }
 

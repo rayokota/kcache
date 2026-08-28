@@ -618,9 +618,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private RecordMetadata doPut(Supplier<List<Future<RecordMetadata>>> acksSupplier) {
         RecordMetadata recordMetadata = null;
-        // The offsets that this call recorded in lastWrittenOffsets, mapped to the values they
-        // replaced, so that they can be rolled back if the write is not known to have succeeded.
-        // A null value indicates that there was no previous offset for that partition.
+        // The highest offset written to each partition by this call
+        Map<Integer, Long> writtenOffsets = new HashMap<>();
+        // The offsets in lastWrittenOffsets that this call replaced, so that they can be rolled
+        // back if the write is not known to have succeeded.  Only partitions whose offset this
+        // call actually installed appear here; a null value means no offset was recorded for
+        // that partition beforehand.
         Map<Integer, Long> replacedWrittenOffsets = new HashMap<>();
         boolean knownSuccessfulWrite = false;
         try {
@@ -629,7 +632,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // Wait for an ack for every record, so that a record that fails is not masked by a
             // later one that succeeds.  The acks are awaited concurrently, so they share a
             // single timeout budget.
-            Map<Integer, Long> writtenOffsets = new HashMap<>();
             long ackDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeout);
             for (Future<RecordMetadata> ack : acks) {
                 recordMetadata = ack.get(remainingNanos(ackDeadline), TimeUnit.NANOSECONDS);
@@ -638,8 +640,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             log.trace("Waiting for the local cache to catch up to offsets {}", writtenOffsets);
             for (Map.Entry<Integer, Long> entry : writtenOffsets.entrySet()) {
-                replacedWrittenOffsets.put(
-                    entry.getKey(), lastWrittenOffsets.put(entry.getKey(), entry.getValue()));
+                recordWrittenOffset(entry.getKey(), entry.getValue(), replacedWrittenOffsets);
             }
             // The local cache catches up to all partitions concurrently, so they too share a
             // single timeout budget.
@@ -665,15 +666,46 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } finally {
             if (!knownSuccessfulWrite) {
                 for (Map.Entry<Integer, Long> entry : replacedWrittenOffsets.entrySet()) {
-                    if (entry.getValue() != null) {
-                        lastWrittenOffsets.put(entry.getKey(), entry.getValue());
+                    int partition = entry.getKey();
+                    Long previousOffset = entry.getValue();
+                    long installedOffset = writtenOffsets.get(partition);
+                    // Only roll back while the offset installed by this call is still the one
+                    // recorded, so that a concurrent write that has since advanced the partition
+                    // is not clobbered
+                    if (previousOffset != null) {
+                        lastWrittenOffsets.replace(partition, installedOffset, previousOffset);
                     } else {
-                        lastWrittenOffsets.remove(entry.getKey());
+                        lastWrittenOffsets.remove(partition, installedOffset);
                     }
                 }
             }
         }
         return recordMetadata;
+    }
+
+    /**
+     * Records that this call wrote up to the given offset on the given partition, without
+     * regressing a higher offset recorded by a concurrent write.  If the offset is installed,
+     * the offset it replaced (possibly null) is added to {@code replacedWrittenOffsets} so that
+     * it can be restored should the write turn out not to have succeeded.
+     */
+    private void recordWrittenOffset(int partition, long offset,
+                                     Map<Integer, Long> replacedWrittenOffsets) {
+        while (true) {
+            Long previousOffset = lastWrittenOffsets.putIfAbsent(partition, offset);
+            if (previousOffset == null) {
+                replacedWrittenOffsets.put(partition, null);
+                return;
+            }
+            if (previousOffset >= offset) {
+                // A concurrent write has already recorded at least this offset
+                return;
+            }
+            if (lastWrittenOffsets.replace(partition, previousOffset, offset)) {
+                replacedWrittenOffsets.put(partition, previousOffset);
+                return;
+            }
+        }
     }
 
     private static long remainingNanos(long deadlineNanos) {

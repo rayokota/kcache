@@ -50,9 +50,11 @@ public abstract class ShutdownableThread extends Thread {
 
     /**
      * Waits for the given time, returning early if shutdown is initiated
+     *
+     * @return true if shutdown was initiated, false if the time elapsed
      */
-    protected void pause(long timeout, TimeUnit unit) throws InterruptedException {
-        shutdownInitiated.await(timeout, unit);
+    protected boolean pause(long timeout, TimeUnit unit) throws InterruptedException {
+        return shutdownInitiated.await(timeout, unit);
     }
 
     protected void awaitShutdown() throws InterruptedException {

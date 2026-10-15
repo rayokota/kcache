@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class ShutdownableThread extends Thread {
@@ -28,6 +29,7 @@ public abstract class ShutdownableThread extends Thread {
 
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final CountDownLatch shutdownInitiated = new CountDownLatch(1);
 
     public ShutdownableThread(String name) {
         super(name);
@@ -41,7 +43,16 @@ public abstract class ShutdownableThread extends Thread {
     }
 
     protected boolean initiateShutdown() {
-        return isRunning.getAndSet(false);
+        boolean wasRunning = isRunning.getAndSet(false);
+        shutdownInitiated.countDown();
+        return wasRunning;
+    }
+
+    /**
+     * Waits for the given time, returning early if shutdown is initiated
+     */
+    protected void pause(long timeout, TimeUnit unit) throws InterruptedException {
+        shutdownInitiated.await(timeout, unit);
     }
 
     protected void awaitShutdown() throws InterruptedException {

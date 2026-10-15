@@ -881,6 +881,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private final ReentrantLock offsetUpdateLock;
         private final Condition offsetReachedThreshold;
         private final Map<Integer, Long> lastReadOffsets = new ConcurrentHashMap<>();
+        private int pollFailures = 0;
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);
@@ -1049,6 +1050,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
+                pollFailures = 0;
                 count = records.count();
                 cacheUpdateHandler.startBatch(count);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -1144,7 +1146,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (t instanceof WakeupException) {
                     // do nothing
                 } else if (t instanceof KafkaException) {
-                    log.error("Error while polling", t);
+                    // e.g. AuthenticationException during a broker-side auth outage; back off before retrying
+                    long backoffMs = Math.min(30_000L, 100L << Math.min(pollFailures++, 9));
+                    log.error("Error while polling; retrying in {} ms", backoffMs, t);
+                    try {
+                        pause(backoffMs, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
                 } else {
                     log.error("KafkaTopicReader thread for {} has died for an unknown reason.", clientId, t);
                     throw t;

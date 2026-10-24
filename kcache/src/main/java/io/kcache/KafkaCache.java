@@ -282,24 +282,31 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             createOrVerifyTopic();
         }
         this.consumer = new KafkaConsumer<>(getConsumerProperties());
-        if (!readOnly) {
-            Properties producerProperties = getProducerProperties();
-            this.producer = new KafkaProducer<>(producerProperties);
-            ProducerConfig producerConfig = new ProducerConfig(producerProperties);
-            this.partitioner = producerConfig.getConfiguredInstance(
-                ProducerConfig.PARTITIONER_CLASS_CONFIG,
-                Partitioner.class,
-                Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-        }
-
-        // start the background thread that subscribes to the Kafka topic and applies updates.
-        // the thread must be created after the topic has been created.
-        this.kafkaTopicReader = new WorkerThread();
         int count;
         try {
-            count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
-        } catch (IOException e) {
-            throw new CacheInitializationException("Failed to read to end offsets", e);
+            if (!readOnly) {
+                Properties producerProperties = getProducerProperties();
+                this.producer = new KafkaProducer<>(producerProperties);
+                ProducerConfig producerConfig = new ProducerConfig(producerProperties);
+                this.partitioner = producerConfig.getConfiguredInstance(
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    Partitioner.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+            }
+
+            // start the background thread that subscribes to the Kafka topic and applies updates.
+            // the thread must be created after the topic has been created.
+            this.kafkaTopicReader = new WorkerThread();
+            try {
+                count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
+            } catch (IOException e) {
+                throw new CacheInitializationException("Failed to read to end offsets", e);
+            }
+        } catch (RuntimeException e) {
+            // The clients are closed here, as the reader thread that would close the consumer
+            // has not started; close() then has nothing of theirs left to wait for.
+            closeClients();
+            throw e;
         }
         Map<TopicPartition, Long> checkpoints = checkpointHandler.checkpoints();
         this.kafkaTopicReader.start();
@@ -826,6 +833,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         cacheUpdateHandler.cacheFlushed();
     }
 
+    // Closes the Kafka clients after an init that failed before the reader thread started.
+    private void closeClients() {
+        Utils.closeQuietly(consumer, "Kafka cache consumer for " + clientId);
+        Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
+        kafkaTopicReader = null;
+        consumer = null;
+        producer = null;
+    }
+
     @Override
     public void close() throws IOException {
         if (kafkaTopicReader != null) {
@@ -834,6 +850,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } catch (InterruptedException e) {
                 // ignore
             }
+        } else {
+            Utils.closeQuietly(consumer, "Kafka cache consumer for " + clientId);
         }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         localCache.close();

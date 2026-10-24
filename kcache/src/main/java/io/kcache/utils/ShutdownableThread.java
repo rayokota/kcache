@@ -58,7 +58,10 @@ public abstract class ShutdownableThread extends Thread {
     }
 
     protected void awaitShutdown() throws InterruptedException {
-        shutdownLatch.await();
+        // A thread that was never started never counts the latch down.
+        if (getState() != State.NEW) {
+            shutdownLatch.await();
+        }
         log.info("Shutdown completed");
     }
 

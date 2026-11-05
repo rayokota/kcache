@@ -835,11 +835,23 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     // Closes the Kafka clients after an init that failed before the reader thread started.
     private void closeClients() {
-        Utils.closeQuietly(consumer, "Kafka cache consumer for " + clientId);
+        closeConsumer();
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         kafkaTopicReader = null;
         consumer = null;
         producer = null;
+    }
+
+    /**
+     * Closes the consumer without waiting: it neither belongs to a group nor commits offsets, so
+     * a timeout would only wait for its last fetch, which the broker holds on an idle topic for
+     * up to fetch.max.wait.ms.
+     */
+    private void closeConsumer() {
+        if (consumer != null) {
+            Utils.closeQuietly(() -> consumer.close(Duration.ZERO),
+                "Kafka cache consumer for " + clientId);
+        }
     }
 
     @Override
@@ -851,7 +863,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // ignore
             }
         } else {
-            Utils.closeQuietly(consumer, "Kafka cache consumer for " + clientId);
+            closeConsumer();
         }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         localCache.close();
@@ -1290,7 +1302,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 consumer.wakeup();
             }
             super.awaitShutdown();
-            Utils.closeQuietly(consumer, "Kafka cache consumer for " + clientId);
+            closeConsumer();
             log.info("KafkaTopicReader thread shutdown complete for {}.", clientId);
         }
     }

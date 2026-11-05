@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.junit.After;
@@ -43,6 +44,7 @@ import java.io.IOException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaCacheTest extends ClusterTestHarness {
@@ -101,6 +103,20 @@ public class KafkaCacheTest extends ClusterTestHarness {
             retrievedValue = kafkaCache.get(key2);
             assertEquals("Retrieved value should match entered value", value2, retrievedValue);
         }
+    }
+
+    @Test
+    public void testCloseDoesNotWaitForTheLastFetch() throws Exception {
+        Properties props = getKafkaCacheProperties();
+        // An idle topic's fetch is held this long, which closing would otherwise wait for.
+        props.put("kafkacache." + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 10_000);
+        Cache<String, String> kafkaCache = CacheUtils.createAndInitKafkaCacheInstance(props);
+        // Once put returns, the reader has read the record and fetches again, from the idle topic.
+        kafkaCache.put("key", "value");
+        long start = System.nanoTime();
+        kafkaCache.close();
+        long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+        assertTrue("Closing took " + ms + " ms", ms < 5_000);
     }
 
     @Test

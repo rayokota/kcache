@@ -979,9 +979,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             log.info("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
+            // A topic deleted or truncated as it is read never reaches the end offsets taken, so
+            // a read that has not moved for the timeout gives up, while one that moves goes on
+            // however long it takes.
+            Map<TopicPartition, Long> positions = positions(endOffsets.keySet(), timeout);
+            long lastMoved = System.nanoTime();
+            // A poll that waited longer than the timeout could wait for good on a deleted topic.
+            Duration pollFor = Duration.ofMillis(Math.min(pollTimeout, timeout.toMillis()));
             while (!hasReadToEndOffsets(endOffsets, timeout)) {
                 try {
-                    count += poll();
+                    count += poll(pollFor);
                 } catch (InvalidOffsetException e) {
                     if (localCache.isPersistent()) {
                         localCache.close();
@@ -991,6 +998,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     log.warn("Seeking to start due to invalid offset", e);
                     seekToStart(assignment, timeout);
                     count = 0;
+                }
+                Map<TopicPartition, Long> now = positions(endOffsets.keySet(), timeout);
+                if (!now.equals(positions)) {
+                    positions = now;
+                    lastMoved = System.nanoTime();
+                } else if (System.nanoTime() - lastMoved > timeout.toNanos()) {
+                    throw new IOException("Reading topic " + topic + " made no progress for "
+                        + timeout.toMillis() + " ms, short of end offsets " + endOffsets);
                 }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);
@@ -1038,6 +1053,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
+        private Map<TopicPartition, Long> positions(Collection<TopicPartition> topicPartitions,
+                                                    Duration timeout) {
+            Map<TopicPartition, Long> positions = new HashMap<>();
+            for (TopicPartition tp : topicPartitions) {
+                positions.put(tp, consumer.position(tp, timeout));
+            }
+            return positions;
+        }
+
         private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets, Duration timeout) {
             endOffsets.entrySet().removeIf(entry ->
                 consumer.position(entry.getKey(), timeout) >= entry.getValue());
@@ -1077,9 +1101,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         private int poll() {
+            return poll(Duration.ofMillis(pollTimeout));
+        }
+
+        private int poll(Duration timeout) {
             int count = 0;
             try {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(pollTimeout));
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
                 pollFailures = 0;
                 count = records.count();
                 cacheUpdateHandler.startBatch(count);

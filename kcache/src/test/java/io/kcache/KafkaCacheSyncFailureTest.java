@@ -97,6 +97,24 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
+    // A cache that has written to every partition syncs by waiting for its own writes: once it
+    // is closed, its sync fails all the same, rather than return as if the cache were open.
+    @Test
+    public void testASyncAfterCloseOfACacheThatWroteFails() throws Exception {
+        KafkaCache<String, String> cache =
+            cache(properties("sync-after-close-wrote", "sync-after-close-wrote"));
+        cache.init();
+        cache.put("k", "v");
+        cache.close();
+        FutureTask<Void> sync = start(cache::sync);
+        try {
+            sync.get(30, TimeUnit.SECONDS);
+            fail("sync should fail");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof CacheException);
+        }
+    }
+
     // A sync still waiting as the reader thread stops fails, rather than wait for good.
     @Test
     public void testASyncWaitingAsTheCacheClosesFails() throws Exception {

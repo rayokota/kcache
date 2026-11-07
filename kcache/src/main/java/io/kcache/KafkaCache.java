@@ -340,6 +340,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             );
         }
 
+        // Checked before either wait, as a cache that has written to every partition waits for
+        // its own writes, which a stopped reader thread may already have read.
+        synchronized (this) {
+            if (readerStopped) {
+                throw new CacheException(readerStoppedMessage());
+            }
+        }
+
         int count = -1;
         if (kafkaTopicReader != null) {
             count = kafkaTopicReader.waitUntilLastWrittenOffsets(Duration.ofMillis(timeout));
@@ -1110,13 +1118,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             try {
                 super.run();
             } finally {
-                // No read follows: the syncs waiting fail, and so do any that come later.
-                synchronized (KafkaCache.this) {
-                    readerStopped = true;
-                    CacheException error = new CacheException(readerStoppedMessage());
-                    for (CompletableFuture<Integer> cb; (cb = syncCallbacks.poll()) != null; ) {
-                        cb.completeExceptionally(error);
-                    }
+                stopSyncs();
+            }
+        }
+
+        // No read follows: the syncs waiting fail, and so do any that come later.
+        private void stopSyncs() {
+            synchronized (KafkaCache.this) {
+                readerStopped = true;
+                CacheException error = new CacheException(readerStoppedMessage());
+                for (CompletableFuture<Integer> cb; (cb = syncCallbacks.poll()) != null; ) {
+                    cb.completeExceptionally(error);
                 }
             }
         }
@@ -1381,6 +1393,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     interrupted = true;
                 }
             }
+            // The thread counts its shutdown down before it stops the syncs itself, so a sync
+            // that follows close() could otherwise still find the reader running.
+            stopSyncs();
             closeConsumer();
             if (interrupted) {
                 Thread.currentThread().interrupt();

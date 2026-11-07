@@ -13,6 +13,7 @@
  */
 package io.kcache;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -30,6 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -126,6 +128,52 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             } catch (ExecutionException e) {
                 assertTrue(e.getCause() instanceof CacheException);
             }
+        } finally {
+            handler.releaseAll();
+        }
+    }
+
+    // A close on the thread of a sync that was interrupted still waits for the reader thread to
+    // stop, rather than close the local cache under it, and keeps the interrupt.
+    @Test
+    public void testACloseAfterAnInterruptedSyncWaitsForTheReader() throws Exception {
+        String topic = "close-after-interrupted-sync";
+        HoldingHandler handler = new HoldingHandler(0);
+        try (KafkaCache<String, String> writer =
+                 cache(properties("close-after-interrupted-sync-writer", topic))) {
+            writer.init();
+            KafkaCache<String, String> reader =
+                cache(properties("close-after-interrupted-sync", topic), handler);
+            reader.init();
+            writer.put("k", "v");
+            handler.awaitEntered(0);
+
+            AtomicBoolean syncFailed = new AtomicBoolean();
+            AtomicBoolean interruptKept = new AtomicBoolean();
+            FutureTask<Void> syncThenClose = start(() -> {
+                try {
+                    reader.sync();
+                } catch (CacheException e) {
+                    syncFailed.set(true);
+                }
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+                interruptKept.set(Thread.currentThread().isInterrupted());
+            });
+            Thread thread = thread(syncThenClose);
+            awaitWaitingIn(thread, "waitUntilEndOffsets");
+            thread.interrupt();
+            awaitWaitingIn(thread, "awaitShutdown");
+            handler.release(0);
+
+            syncThenClose.get(30, TimeUnit.SECONDS);
+            assertTrue(syncFailed.get());
+            assertTrue(interruptKept.get());
+            Thread readerThread = reader.getWorkerThread();
+            assertFalse(readerThread.isAlive());
         } finally {
             handler.releaseAll();
         }

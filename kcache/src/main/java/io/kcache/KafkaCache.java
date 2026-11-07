@@ -867,11 +867,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public void close() throws IOException {
         if (kafkaTopicReader != null) {
-            try {
-                kafkaTopicReader.shutdown();
-            } catch (InterruptedException e) {
-                // ignore
-            }
+            kafkaTopicReader.shutdown();
         } else {
             closeConsumer();
         }
@@ -1363,16 +1359,32 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 .reduce(0, Integer::sum);
         }
 
+        /**
+         * Waits for the thread to stop even when interrupted, as a thread still running would go
+         * on reading into the local cache and checkpointing past what it stored, once close()
+         * has closed them. An interrupt is restored once the thread has stopped.
+         */
         @Override
-        public void shutdown() throws InterruptedException {
+        public void shutdown() {
             log.debug("Starting shutdown of KafkaTopicReader thread for {}.", clientId);
 
             super.initiateShutdown();
             if (consumer != null) {
                 consumer.wakeup();
             }
-            super.awaitShutdown();
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    super.awaitShutdown();
+                    break;
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
             closeConsumer();
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
             log.info("KafkaTopicReader thread shutdown complete for {}.", clientId);
         }
     }

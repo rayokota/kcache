@@ -981,11 +981,23 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 notifyAll();
             }
         }
+        if (kafkaTopicReader != null && Thread.currentThread() == kafkaTopicReader) {
+            // On the reader thread, as from an update handler, which cannot wait for itself to
+            // stop: it stops once the handler returns, and closes the rest itself then, rather
+            // than have it closed under the record it is applying.
+            kafkaTopicReader.stopAndClose();
+            return;
+        }
         if (kafkaTopicReader != null) {
             kafkaTopicReader.shutdown();
         } else {
             closeConsumer();
         }
+        closeRest();
+    }
+
+    // Closes what the cache reads into and writes with, once no reader thread uses it.
+    private void closeRest() throws IOException {
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         localCache.close();
         checkpointHandler.close();
@@ -1045,6 +1057,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         private final Condition offsetReachedThreshold;
         private final Map<Integer, Long> lastReadOffsets = new ConcurrentHashMap<>();
         private int pollFailures = 0;
+        // Whether the thread closes the rest of the cache as it stops, for a close() on it.
+        private volatile boolean closeOnStop;
 
         public WorkerThread() {
             super("kafka-cache-reader-thread-" + topic);
@@ -1116,9 +1130,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // A topic deleted or truncated as it is read never reaches the end offsets taken, so
             // a read that has not moved for the timeout gives up, while one that moves goes on
             // however long it takes.
-            long lastMoved = System.nanoTime();
+            // The first lookups, as those after each poll, get a timeout of their own; the read's
+            // starts once they are done.
             Map<TopicPartition, Long> positions =
-                positions(endOffsets.keySet(), lastMoved + timeout.toNanos());
+                positions(endOffsets.keySet(), System.nanoTime() + timeout.toNanos());
+            long lastMoved = System.nanoTime();
             // The positions last taken serve for both, as nothing moves them in between.
             while (!hasReadToEndOffsets(endOffsets, positions)) {
                 // A poll swallows the wakeup from close(), so the read stops for it here instead.
@@ -1309,10 +1325,25 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw e;
             } finally {
                 stopSyncs(failure);
-                // Here as well as in shutdown(), for a close() on this thread, which cannot wait
-                // for it to stop.
                 closeConsumer();
+                if (closeOnStop) {
+                    try {
+                        closeRest();
+                    } catch (IOException | RuntimeException e) {
+                        log.warn("Failed to close the Kafka cache for {}", clientId, e);
+                    }
+                }
             }
+        }
+
+        /**
+         * For a close() on this thread, as from an update handler: the thread stops once the
+         * handler returns, after the batch it is applying, and then closes the rest of the cache
+         * itself.
+         */
+        private void stopAndClose() {
+            closeOnStop = true;
+            super.initiateShutdown();
         }
 
         /**
@@ -1332,7 +1363,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
             }
             // Syncs waiting for their own writes, which no read will reach now, stop waiting.
-            // Signalled outside the lock on the cache, which those syncs take inside this one.
+            // Signalled outside the lock on the cache, so that the two are never held together.
             offsetUpdateLock.lock();
             try {
                 offsetReachedThreshold.signalAll();
@@ -1375,12 +1406,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 count = records.count();
                 cacheUpdateHandler.startBatch(count);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
-                    // Once the thread is stopping, as for a close() from an update handler on
-                    // this thread, which closes the local cache and checkpoints as it returns, no
-                    // more is applied, so none is checkpointed past what was stored.
-                    if (!isRunning()) {
-                        break;
-                    }
                     try {
                         K messageKey;
                         try {
@@ -1458,8 +1483,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                if (isRunning() && localCache.isPersistent()
-                    && (checkpointBeforeInit || initialized.get())) {
+                if (localCache.isPersistent() && (checkpointBeforeInit || initialized.get())) {
                     try {
                         localCache.flush();
                         Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(count);
@@ -1605,9 +1629,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         /**
          * Waits for the thread to stop even when interrupted, as a thread still running would go
          * on reading into the local cache and checkpointing past what it stored, once close()
-         * has closed them. An interrupt is restored once the thread has stopped. On the thread
-         * itself, as from an update handler, it only asks the thread to stop, which it does once
-         * the handler returns.
+         * has closed them. An interrupt is restored once the thread has stopped. Not called on
+         * the thread itself, which close() asks to stop with stopAndClose() instead.
          */
         @Override
         public void shutdown() {
@@ -1617,15 +1640,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (consumer != null) {
                 consumer.wakeup();
             }
-            if (Thread.currentThread() == this) {
-                return;
-            }
             boolean interrupted = false;
             while (true) {
                 try {
-                    super.awaitShutdown();
-                    // The thread counts its shutdown down before it stops the syncs, recording
-                    // what it died of, and before it ends: joining it waits for both.
+                    // Until the thread has ended, past stopping the syncs with what it died of;
+                    // at once for one that never started.
                     join();
                     break;
                 } catch (InterruptedException e) {

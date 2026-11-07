@@ -38,6 +38,7 @@ import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.Test;
@@ -151,6 +152,71 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         reader.close();
     }
 
+    // An init whose thread is interrupted as it reads fails with the consumer's error at once,
+    // rather than back off from it, which the interrupt cuts short, and poll again and again
+    // until the read times out.
+    @Test
+    public void testAnInitInterruptedAsItReadsFailsWithTheInterrupt() throws Exception {
+        String topic = "interrupted-as-read";
+        Properties writing = properties("interrupted-as-read-writer");
+        writing.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        try (KafkaCache<String, String> writer = cache(writing)) {
+            writer.init();
+            for (int i = 0; i < 3; i++) {
+                writer.put("k" + i, "v" + i);
+            }
+        }
+        Properties props = properties("interrupted-as-read");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        // A record at a time, so that the read polls again after the first.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        HoldingFirstUpdate handler = new HoldingFirstUpdate();
+        KafkaCache<String, String> reader = cache(props, handler);
+        FutureTask<Void> init = new FutureTask<>(() -> {
+            reader.init();
+            return null;
+        });
+        Thread initializer = new Thread(init);
+        initializer.setDaemon(true);
+        initializer.start();
+        try {
+            assertTrue(handler.entered.await(30, TimeUnit.SECONDS));
+            initializer.interrupt();
+        } finally {
+            handler.release.countDown();
+        }
+        try {
+            init.get(60, TimeUnit.SECONDS);
+            fail("init should fail");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof CacheInitializationException);
+            assertTrue(e.getCause().getCause() instanceof InterruptException);
+        } finally {
+            reader.close();
+        }
+    }
+
+    /** Holds the first update, on whichever thread applies it, until released. */
+    private static class HoldingFirstUpdate extends StringUpdateHandler {
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public void handleUpdate(String key, String value, String oldValue,
+                                 TopicPartition tp, long offset, long timestamp) {
+            super.handleUpdate(key, value, oldValue, tp, offset, timestamp);
+            if (entered.getCount() > 0) {
+                entered.countDown();
+                try {
+                    release.await(60, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+    }
+
     /** Holds the first poll that returns records, until released. */
     public static class HoldingFirstPoll implements ConsumerInterceptor<byte[], byte[]>,
         ProducerInterceptor<byte[], byte[]> {
@@ -202,8 +268,12 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
     }
 
     private static KafkaCache<String, String> cache(Properties props) {
+        return cache(props, new StringUpdateHandler());
+    }
+
+    private static KafkaCache<String, String> cache(Properties props, StringUpdateHandler handler) {
         return new KafkaCache<>(new KafkaCacheConfig(props), Serdes.String(), Serdes.String(),
-            new StringUpdateHandler(), null);
+            handler, null);
     }
 
     private static void failInit(KafkaCache<String, String> cache) {

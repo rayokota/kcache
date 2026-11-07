@@ -326,7 +326,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             try {
                 count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
-            } catch (IOException | org.apache.kafka.common.errors.TimeoutException e) {
+            } catch (IOException | KafkaException e) {
+                // Whatever the read failed with, as an error from a poll, it fails init.
                 throw new CacheInitializationException("Failed to read to end offsets", e);
             }
         } catch (RuntimeException e) {
@@ -1062,7 +1063,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 Duration pollFor = Duration.ofNanos(
                     Math.max(0, Math.min(TimeUnit.MILLISECONDS.toNanos(pollTimeout), left)));
                 try {
-                    count += poll(pollFor);
+                    count += poll(pollFor, false);
                 } catch (InvalidOffsetException e) {
                     if (localCache.isPersistent()) {
                         localCache.close();
@@ -1264,10 +1265,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         private int poll() {
-            return poll(Duration.ofMillis(pollTimeout));
+            return poll(Duration.ofMillis(pollTimeout), true);
         }
 
-        private int poll(Duration timeout) {
+        /**
+         * Polls once. An error from the consumer is backed off from, as by the thread between
+         * reads, or else thrown, as by a read: it fails with the error, as when its other calls
+         * fail, rather than back off past its timeout and fail as having timed out.
+         */
+        private int poll(Duration timeout, boolean backOffOnError) {
             int count = 0;
             try {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
@@ -1366,6 +1372,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 cacheUpdateHandler.failBatch(count, t);
                 if (t instanceof WakeupException) {
                     // do nothing
+                } else if (t instanceof KafkaException && !backOffOnError) {
+                    throw t;
                 } else if (t instanceof KafkaException) {
                     // e.g. AuthenticationException during a broker-side auth outage; back off before retrying
                     long backoffMs = Math.min(30_000L, 100L << Math.min(pollFailures++, 9));

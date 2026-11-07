@@ -1117,7 +1117,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 long left = timeout.toNanos() - (System.nanoTime() - lastMoved);
                 Duration pollFor = Duration.ofNanos(
                     Math.max(0, Math.min(TimeUnit.MILLISECONDS.toNanos(pollTimeout), left)));
-                count += poll(pollFor, false);
+                int polled = poll(pollFor, false);
+                count += polled;
+                if (polled > 0) {
+                    // Records came, so the read moved: the lookups that follow get their time from
+                    // now, rather than what was left before, perhaps nothing.
+                    lastMoved = System.nanoTime();
+                }
                 Map<TopicPartition, Long> now =
                     positions(endOffsets.keySet(), lastMoved + timeout.toNanos());
                 // A position goes back only when the consumer resets it, as the log has ended
@@ -1502,7 +1508,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = timeout.toNanos();
-                while (lastReadOffsets.get(partition) < offset && timeoutNs > 0) {
+                while (lastReadOffsets.get(partition) < offset && timeoutNs > 0 && !readerStopped) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
@@ -1515,6 +1521,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
 
             if (lastReadOffsets.get(partition) < offset) {
+                // No reader will reach the offset: the write fails at once, as a sync does, with
+                // what the reader died of, rather than time out as one a caller may try again.
+                if (readerStopped) {
+                    synchronized (KafkaCache.this) {
+                        throw readerStoppedException();
+                    }
+                }
                 throw new CacheTimeoutException(
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
                         + "targetOffset: " + offset + ", offsetReached: " + lastReadOffsets.get(partition)

@@ -1205,7 +1205,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
 
         // The positions, each looked up with what is left before the deadline, so that together
-        // they wait no longer than the read has left.
+        // they wait no longer than until it.
         private Map<TopicPartition, Long> positions(Collection<TopicPartition> topicPartitions,
                                                     long deadlineNanos) {
             Map<TopicPartition, Long> positions = new HashMap<>();
@@ -1470,10 +1470,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
                 cacheUpdateHandler.endBatch(count);
             } catch (Throwable t) {
-                cacheUpdateHandler.failBatch(count, t);
                 if (t instanceof WakeupException) {
-                    // do nothing
-                } else if (t instanceof KafkaException && !backOffOnError) {
+                    // A wakeup cuts the consumer's poll short, before any batch began: none failed.
+                    return count;
+                }
+                cacheUpdateHandler.failBatch(count, t);
+                if (t instanceof KafkaException && !backOffOnError) {
                     throw t;
                 } else if (t instanceof KafkaException) {
                     // e.g. AuthenticationException during a broker-side auth outage; back off before retrying

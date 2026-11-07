@@ -1079,7 +1079,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // however long it takes.
             Map<TopicPartition, Long> positions = positions(endOffsets.keySet(), timeout);
             long lastMoved = System.nanoTime();
-            while (!hasReadToEndOffsets(endOffsets, timeout)) {
+            // The positions last taken serve for both, as nothing moves them in between.
+            while (!hasReadToEndOffsets(endOffsets, positions)) {
                 // A poll swallows the wakeup from close(), so the read stops for it here instead.
                 if (!isRunning()) {
                     throw new WakeupException();
@@ -1177,9 +1178,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             return positions;
         }
 
-        private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets, Duration timeout) {
-            endOffsets.entrySet().removeIf(entry ->
-                position(entry.getKey(), timeout) >= entry.getValue());
+        // Drops the partitions read to their end offsets, by the given positions of them all.
+        private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets,
+                                            Map<TopicPartition, Long> positions) {
+            endOffsets.entrySet().removeIf(entry -> positions.get(entry.getKey()) >= entry.getValue());
             return endOffsets.isEmpty();
         }
 

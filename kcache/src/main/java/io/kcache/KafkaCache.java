@@ -283,11 +283,37 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         try {
             initCache();
         } catch (RuntimeException | Error e) {
+            discardFailedInit(e);
             synchronized (this) {
                 initFailure = e;
                 notifyAll();
             }
             throw e;
+        }
+    }
+
+    /**
+     * Drops what an init that failed applied to a local cache that is not persistent, so that an
+     * init after it starts as a new cache would, rather than keep records that the topic, read
+     * again, may no longer have. A persistent cache keeps them, as after a restart. Unless
+     * another init has succeeded meanwhile, whose records they then are.
+     */
+    private void discardFailedInit(Throwable failure) {
+        if (localCache.isPersistent() || initialized.get()) {
+            return;
+        }
+        try {
+            try {
+                localCache.clear();
+            } catch (UnsupportedOperationException e) {
+                // As for a cache that guards its entries one by one.
+                for (K key : new ArrayList<>(localCache.keySet())) {
+                    localCache.remove(key);
+                }
+            }
+            cacheUpdateHandler.cacheReset();
+        } catch (RuntimeException e) {
+            failure.addSuppressed(e);
         }
     }
 

@@ -13,6 +13,8 @@
  */
 package io.kcache;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -194,6 +196,69 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
             assertTrue(e.getCause().getCause() instanceof InterruptException);
         } finally {
             reader.close();
+        }
+    }
+
+    // An init that fails as it reads keeps none of what it read, so that an init after it, of
+    // the topic created again empty, holds nothing, as a new cache would.
+    @Test
+    public void testAnInitAfterOneThatFailedAsItReadKeepsNothingOfIt() throws Exception {
+        String topic = "init-again";
+        Properties writing = properties("init-again-writer");
+        writing.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        try (KafkaCache<String, String> writer = cache(writing)) {
+            writer.init();
+            for (int i = 0; i < 20; i++) {
+                writer.put("k" + i, "v" + i);
+            }
+        }
+        Properties props = properties("init-again");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        // A record at a time, so that most are still to be fetched once the topic is gone.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        HoldingFirstUpdate handler = new HoldingFirstUpdate();
+        KafkaCache<String, String> reader = cache(props, handler);
+        FutureTask<Void> init = new FutureTask<>(() -> {
+            reader.init();
+            return null;
+        });
+        Thread initializer = new Thread(init);
+        initializer.setDaemon(true);
+        initializer.start();
+        try (Admin admin = Admin.create(Collections.singletonMap(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+            // The read holds record 0, already applied to the local cache, as the topic goes.
+            try {
+                assertTrue(handler.entered.await(30, TimeUnit.SECONDS));
+                admin.deleteTopics(Collections.singletonList(topic)).all().get(30, TimeUnit.SECONDS);
+            } finally {
+                handler.release.countDown();
+            }
+            try {
+                init.get(60, TimeUnit.SECONDS);
+                fail("init should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheInitializationException);
+            }
+            awaitDeleted(admin, topic);
+        }
+        try {
+            // Init creates the topic again, empty.
+            reader.init();
+            assertNull(reader.get("k0"));
+            assertEquals(0, reader.size());
+        } finally {
+            reader.close();
+        }
+    }
+
+    // Waits, for at most 30 seconds, until the broker has finished deleting the topic.
+    private static void awaitDeleted(Admin admin, String topic) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (admin.listTopics().names().get(30, TimeUnit.SECONDS).contains(topic)) {
+            assertTrue(System.nanoTime() < deadline);
+            Thread.sleep(100);
         }
     }
 

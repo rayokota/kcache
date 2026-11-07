@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -339,7 +340,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 e
             );
         }
-
         // Checked before either wait, as a cache that has written to every partition waits for
         // its own writes, which a stopped reader thread may already have read.
         synchronized (this) {
@@ -989,7 +989,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         private int readToEndOffsets(Duration timeout) throws IOException {
             Set<TopicPartition> assignment = consumer.assignment();
-            Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment, timeout);
+            Map<TopicPartition, Long> endOffsets =
+                retryOnWakeup(timeout, left -> consumer.endOffsets(assignment, left));
             log.info("Reading to end of offsets {}", endOffsets);
 
             int count = 0;
@@ -1075,15 +1076,46 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                                     Duration timeout) {
             Map<TopicPartition, Long> positions = new HashMap<>();
             for (TopicPartition tp : topicPartitions) {
-                positions.put(tp, consumer.position(tp, timeout));
+                positions.put(tp, position(tp, timeout));
             }
             return positions;
         }
 
         private boolean hasReadToEndOffsets(Map<TopicPartition, Long> endOffsets, Duration timeout) {
             endOffsets.entrySet().removeIf(entry ->
-                consumer.position(entry.getKey(), timeout) >= entry.getValue());
+                position(entry.getKey(), timeout) >= entry.getValue());
             return endOffsets.isEmpty();
+        }
+
+        private long position(TopicPartition tp, Duration timeout) {
+            return retryOnWakeup(timeout, left -> consumer.position(tp, left));
+        }
+
+        /**
+         * Calls a consumer method that blocks, and calls it again when a sync's wakeup cuts it
+         * short, as a sync that arrives during a read is read for by the next read rather than
+         * restart this one; the calls together wait no longer than the timeout, so that a stream
+         * of syncs cannot keep a read that fails from failing. A wakeup from close() still stops
+         * the read.
+         */
+        private <T> T retryOnWakeup(Duration timeout, Function<Duration, T> call) {
+            long start = System.nanoTime();
+            Duration left = timeout;
+            while (true) {
+                try {
+                    return call.apply(left);
+                } catch (WakeupException e) {
+                    if (!isRunning()) {
+                        throw e;
+                    }
+                    left = timeout.minusNanos(System.nanoTime() - start);
+                    if (left.isNegative() || left.isZero()) {
+                        // Not called again with no time left, as endOffsets() then returns none.
+                        throw new org.apache.kafka.common.errors.TimeoutException("Reading topic "
+                            + topic + " timed out after " + timeout.toMillis() + " ms");
+                    }
+                }
+            }
         }
 
         @Override
@@ -1098,7 +1130,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 try {
                     count = readToEndOffsets(Duration.ofMillis(timeout));
                 } catch (WakeupException e) {
-                    // Another sync woke the read: restart the doWork() loop, for all the syncs.
+                    // The cache is closing: the thread stops, and the syncs fail.
                     return;
                 } catch (KafkaException | IOException e) {
                     log.error("Error while reading to end offsets", e);
@@ -1110,6 +1142,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             completeCallbacks(numCallbacks, count, null);
 
+            // A sync that came during the read, its wakeup perhaps spent there, is read for next,
+            // rather than wait on a poll that its wakeup no longer cuts short.
+            synchronized (KafkaCache.this) {
+                if (!syncCallbacks.isEmpty()) {
+                    return;
+                }
+            }
             poll();
         }
 

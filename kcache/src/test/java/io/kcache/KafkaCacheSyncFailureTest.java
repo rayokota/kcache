@@ -115,6 +115,52 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
+    // Syncs that keep coming, faster than the timeout, do not keep the read of a deleted topic
+    // from failing: the first sync fails while they still come.
+    @Test
+    public void testSyncsThatKeepComingDoNotKeepAReadOfADeletedTopicFromFailing()
+        throws Exception {
+        String topic = "deleted-before-syncs";
+        try (KafkaCache<String, String> writer =
+                 cache(properties("deleted-before-syncs-writer", topic))) {
+            writer.init();
+            writer.put("k", "v");
+        }
+        KafkaCache<String, String> reader = cache(properties("deleted-before-syncs", topic));
+        reader.init();
+        AtomicBoolean stop = new AtomicBoolean();
+        Thread syncs = new Thread(() -> {
+            while (!stop.get()) {
+                start(reader::sync);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
+        syncs.setDaemon(true);
+        try {
+            try (Admin admin = Admin.create(Collections.singletonMap(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+                admin.deleteTopics(Collections.singletonList(topic)).all().get(30, TimeUnit.SECONDS);
+            }
+            FutureTask<Void> first = start(reader::sync);
+            syncs.start();
+            // The timeout is 2 seconds, so the syncs are still coming when the first one fails.
+            try {
+                first.get(20, TimeUnit.SECONDS);
+                fail("sync should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheException);
+            }
+        } finally {
+            stop.set(true);
+            syncs.join(TimeUnit.SECONDS.toMillis(30));
+            reader.close();
+        }
+    }
+
     // A sync still waiting as the reader thread stops fails, rather than wait for good.
     @Test
     public void testASyncWaitingAsTheCacheClosesFails() throws Exception {

@@ -18,6 +18,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.kcache.exceptions.CacheException;
+import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.ClusterTestHarness;
 import io.kcache.utils.StringUpdateHandler;
@@ -90,6 +91,50 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         cache.init();
         cache.close();
         FutureTask<Void> sync = start(cache::sync);
+        try {
+            sync.get(30, TimeUnit.SECONDS);
+            fail("sync should fail");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof CacheException);
+        }
+    }
+
+    // A sync waiting for an init that fails fails too, rather than wait for good.
+    @Test
+    public void testASyncWaitingForAnInitThatFailsFails() throws Exception {
+        Properties props = properties("sync-as-init-fails", "sync-as-init-fails");
+        // The topic has one partition, not three, so the init's read times out.
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_PARTITIONS_CONFIG, "0,1,2");
+        KafkaCache<String, String> cache = cache(props);
+        try {
+            FutureTask<Void> sync = start(cache::sync);
+            awaitWaitingIn(thread(sync), "waitForInit");
+            try {
+                cache.init();
+                fail("init should fail");
+            } catch (CacheInitializationException expected) {
+                // the read to the end offsets timed out
+            }
+            try {
+                sync.get(30, TimeUnit.SECONDS);
+                fail("sync should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheException);
+            }
+        } finally {
+            cache.close();
+        }
+    }
+
+    // A sync waiting for the init of a cache that is closed first has no init to wait for: it
+    // fails.
+    @Test
+    public void testASyncWaitingForTheInitOfACacheClosedFirstFails() throws Exception {
+        KafkaCache<String, String> cache =
+            cache(properties("sync-closed-before-init", "sync-closed-before-init"));
+        FutureTask<Void> sync = start(cache::sync);
+        awaitWaitingIn(thread(sync), "waitForInit");
+        cache.close();
         try {
             sync.get(30, TimeUnit.SECONDS);
             fail("sync should fail");

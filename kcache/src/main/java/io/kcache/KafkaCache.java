@@ -82,7 +82,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -108,7 +107,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
-    private final CountDownLatch initLatch = new CountDownLatch(1);
+    // Guarded by this: whether init has succeeded, so that syncs go on, and why it has not, once
+    // init has failed or the cache is closed first, so that the syncs waiting for it fail.
+    private boolean initDone;
+    private Throwable initFailure;
     private boolean skipValidation;
     private boolean requireCompact;
     private boolean readOnly;
@@ -274,7 +276,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
         }
+        synchronized (this) {
+            // A new init, as after one that failed: syncs wait for it, as for the first.
+            initFailure = null;
+        }
+        try {
+            initCache();
+        } catch (RuntimeException | Error e) {
+            synchronized (this) {
+                initFailure = e;
+                notifyAll();
+            }
+            throw e;
+        }
+    }
 
+    private void initCache() {
         if (localCache.isPersistent()) {
             checkpointHandler.init();
             log.info("Successfully read checkpoints");
@@ -327,7 +344,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 + ". Cache was already initialized");
         }
         cacheUpdateHandler.cacheInitialized(count, checkpoints);
-        initLatch.countDown();
+        synchronized (this) {
+            initDone = true;
+            notifyAll();
+        }
     }
 
     @Override
@@ -342,6 +362,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         try {
             waitForInit();
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new CacheException(
                 "Sync operation interrupted while waiting for cache initialization",
                 e
@@ -886,6 +907,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     @Override
     public void close() throws IOException {
+        synchronized (this) {
+            if (!initDone) {
+                // No init follows that the syncs waiting for one could go on after.
+                initFailure = new CacheException(
+                    "The cache for " + clientId + " was closed before it was initialized");
+                notifyAll();
+            }
+        }
         if (kafkaTopicReader != null) {
             kafkaTopicReader.shutdown();
         } else {
@@ -904,9 +933,21 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         cacheUpdateHandler.cacheDestroyed();
     }
 
+    /**
+     * Waits for the cache to be initialized, as by another thread.
+     *
+     * @throws CacheException if init fails, or the cache is closed, before the cache is
+     *     initialized; a later init may still succeed
+     */
     public void waitForInit() throws InterruptedException {
-        if (initLatch.getCount() > 0) {
-            initLatch.await();
+        synchronized (this) {
+            while (!initDone) {
+                if (initFailure != null) {
+                    throw new CacheException(
+                        "The cache for " + clientId + " is not initialized", initFailure);
+                }
+                wait();
+            }
         }
     }
 

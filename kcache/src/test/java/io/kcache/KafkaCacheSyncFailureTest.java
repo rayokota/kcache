@@ -13,6 +13,7 @@
  */
 package io.kcache;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -35,6 +36,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -455,7 +457,8 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
     }
 
     // A close() from an update handler, on the reader thread, does not wait for that thread for
-    // good, and closes the local cache and the handler only once the thread has done with them.
+    // good, and closes the local cache and the handler only once the thread has done with them,
+    // and only once, though the application then closes the cache too.
     @Test
     public void testACloseFromAnUpdateHandlerClosesOnceTheReaderHasStopped() throws Exception {
         String topic = "close-from-handler";
@@ -465,33 +468,39 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             new KafkaCacheConfig(properties("close-from-handler", topic)),
             Serdes.String(), Serdes.String(), handler, localCache);
         handler.cache = reader;
-        try (KafkaCache<String, String> writer =
-                 cache(properties("close-from-handler-writer", topic))) {
-            writer.init();
-            reader.init();
-            writer.put("k0", "v0");
-            writer.put("k1", "v1");
+        try {
+            try (KafkaCache<String, String> writer =
+                     cache(properties("close-from-handler-writer", topic))) {
+                writer.init();
+                reader.init();
+                writer.put("k0", "v0");
+                writer.put("k1", "v1");
+            }
+            Thread readerThread = reader.getWorkerThread();
+            readerThread.join(TimeUnit.SECONDS.toMillis(30));
+            assertFalse(readerThread.isAlive());
+            assertEquals(1, handler.closes.get());
+            assertEquals(1, localCache.closes.get());
+            assertFalse(handler.usedAfterClose.get());
+            assertFalse(localCache.usedAfterClose.get());
+        } finally {
+            reader.close();
         }
-        Thread readerThread = reader.getWorkerThread();
-        readerThread.join(TimeUnit.SECONDS.toMillis(30));
-        assertFalse(readerThread.isAlive());
-        assertTrue(handler.closed.get());
-        assertTrue(localCache.closed.get());
-        assertFalse(handler.usedAfterClose.get());
-        assertFalse(localCache.usedAfterClose.get());
+        assertEquals(1, handler.closes.get());
+        assertEquals(1, localCache.closes.get());
     }
 
     /** Closes its cache from the first update it handles on the reader thread. */
     private static class ClosingHandler extends StringUpdateHandler {
         volatile KafkaCache<String, String> cache;
-        final AtomicBoolean closed = new AtomicBoolean();
+        final AtomicInteger closes = new AtomicInteger();
         final AtomicBoolean usedAfterClose = new AtomicBoolean();
         private final AtomicBoolean closing = new AtomicBoolean();
 
         @Override
         public void handleUpdate(String key, String value, String oldValue,
                                  TopicPartition tp, long offset, long timestamp) {
-            usedAfterClose.compareAndSet(false, closed.get());
+            usedAfterClose.compareAndSet(false, closes.get() > 0);
             super.handleUpdate(key, value, oldValue, tp, offset, timestamp);
             if (Thread.currentThread().getName().startsWith("kafka-cache-reader-thread")
                 && closing.compareAndSet(false, true)) {
@@ -505,29 +514,29 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
 
         @Override
         public void endBatch(int count) {
-            usedAfterClose.compareAndSet(false, closed.get());
+            usedAfterClose.compareAndSet(false, closes.get() > 0);
         }
 
         @Override
         public void close() {
-            closed.set(true);
+            closes.incrementAndGet();
         }
     }
 
     /** Records whether it was written to once closed. */
     private static class RecordingLocalCache extends InMemoryCache<String, String> {
-        final AtomicBoolean closed = new AtomicBoolean();
+        final AtomicInteger closes = new AtomicInteger();
         final AtomicBoolean usedAfterClose = new AtomicBoolean();
 
         @Override
         public String put(String key, String value) {
-            usedAfterClose.compareAndSet(false, closed.get());
+            usedAfterClose.compareAndSet(false, closes.get() > 0);
             return super.put(key, value);
         }
 
         @Override
         public void close() {
-            closed.set(true);
+            closes.incrementAndGet();
         }
     }
 

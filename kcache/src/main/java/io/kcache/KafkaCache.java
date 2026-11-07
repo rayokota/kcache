@@ -106,6 +106,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private Serde<V> valueSerde;
     private Cache<K, V> localCache;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
+    // Whether the rest of the cache is closed, by close() or by a reader thread closed from one
+    // of its update handlers, so that it is closed once whichever does it first.
+    private final AtomicBoolean restClosed = new AtomicBoolean(false);
     // Guarded by this: whether init has succeeded, so that syncs go on, and why it has not, once
     // init has failed or the cache is closed first, so that the syncs waiting for it fail.
     private boolean initDone;
@@ -981,14 +984,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 notifyAll();
             }
         }
-        if (kafkaTopicReader != null && Thread.currentThread() == kafkaTopicReader) {
-            // On the reader thread, as from an update handler, which cannot wait for itself to
-            // stop: it stops once the handler returns, and closes the rest itself then, rather
-            // than have it closed under the record it is applying.
-            kafkaTopicReader.stopAndClose();
-            return;
-        }
         if (kafkaTopicReader != null) {
+            if (Thread.currentThread() == kafkaTopicReader) {
+                // On the reader thread, as from an update handler, which cannot wait for itself
+                // to stop: it stops once the handler returns, and closes the rest itself then,
+                // rather than have it closed under the record it is applying. So the rest is not
+                // yet closed when this returns.
+                kafkaTopicReader.stopAndClose();
+                return;
+            }
             kafkaTopicReader.shutdown();
         } else {
             closeConsumer();
@@ -998,6 +1002,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     // Closes what the cache reads into and writes with, once no reader thread uses it.
     private void closeRest() throws IOException {
+        if (!restClosed.compareAndSet(false, true)) {
+            return;
+        }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
         localCache.close();
         checkpointHandler.close();
@@ -1651,9 +1658,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     interrupted = true;
                 }
             }
-            // For a thread that never started, which stops no syncs itself.
-            stopSyncs(null);
-            closeConsumer();
+            // A thread that ran has stopped its syncs and closed its consumer as it ended; one that
+            // never started has not.
+            if (getState() == State.NEW) {
+                stopSyncs(null);
+                closeConsumer();
+            }
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }

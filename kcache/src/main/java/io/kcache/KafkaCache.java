@@ -332,7 +332,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (!skipValidation) {
             createOrVerifyTopic();
         }
-        this.consumer = new KafkaConsumer<>(getConsumerProperties());
+        this.consumer = createConsumer(getConsumerProperties());
         int count;
         try {
             if (!readOnly) {
@@ -477,6 +477,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
         return false;
+    }
+
+    // The consumer the cache reads its topic with; a test may read with one of its own.
+    Consumer<byte[], byte[]> createConsumer(Properties props) {
+        return new KafkaConsumer<>(props);
     }
 
     private Properties getConsumerProperties() {
@@ -1124,15 +1129,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 long left = timeout.toNanos() - (System.nanoTime() - lastMoved);
                 Duration pollFor = Duration.ofNanos(
                     Math.max(0, Math.min(TimeUnit.MILLISECONDS.toNanos(pollTimeout), left)));
-                int polled = poll(pollFor, false);
-                count += polled;
-                if (polled > 0) {
-                    // Records came, so the read moved: the lookups that follow get their time from
-                    // now, rather than what was left before, perhaps nothing.
-                    lastMoved = System.nanoTime();
-                }
+                count += poll(pollFor, false);
+                // The lookups share a timeout of their own, from now, rather than what the poll
+                // left of the read's, perhaps nothing. Only a partition still short of its end
+                // offset moving keeps the read going: records the poll returned may be of one
+                // already at its end, which goes on taking writes.
                 Map<TopicPartition, Long> now =
-                    positions(endOffsets.keySet(), lastMoved + timeout.toNanos());
+                    positions(endOffsets.keySet(), System.nanoTime() + timeout.toNanos());
                 // A position goes back only when the consumer resets it, as the log has ended
                 // below it: the topic was deleted and created again, or truncated, so the end
                 // offsets taken no longer hold. Such a read is no progress, but a failure.

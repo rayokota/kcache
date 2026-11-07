@@ -131,6 +131,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // without it by syncs waiting for their own writes.
     private volatile boolean readerStopped;
     private Throwable readerFailure;
+    // Guarded by this: whether the reader thread waits on its idle poll, which only a wakeup cuts
+    // short for a sync. A reader that is reading reads for a sync next without one.
+    private boolean readerIdle;
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -424,13 +427,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private int waitUntilEndOffsets() throws CacheException {
         CompletableFuture<Integer> future = new CompletableFuture<>();
+        boolean wake;
         synchronized (this) {
             if (readerStopped) {
                 throw readerStoppedException();
             }
             syncCallbacks.add(future);
+            wake = readerIdle;
         }
-        if (consumer != null) {
+        // Only an idle reader is woken: one that is reading would only have its read cut short,
+        // and syncs that kept coming could keep it from ever reaching the end offsets.
+        if (wake && consumer != null) {
             consumer.wakeup();
         }
         try {
@@ -1219,10 +1226,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         /**
          * Calls a consumer method that blocks, and calls it again when a sync's wakeup cuts it
-         * short, as a sync that arrives during a read is read for by the next read rather than
-         * restart this one; the calls together wait no longer than the timeout, so that a stream
-         * of syncs cannot keep a read that fails from failing. A wakeup from close() still stops
-         * the read.
+         * short: one meant for the idle poll, from a sync that came just as that poll returned,
+         * which then reaches the next read instead. The calls together wait no longer than the
+         * timeout. A wakeup from close() still stops the read.
          */
         private <T> T retryOnWakeup(Duration timeout, Function<Duration, T> call) {
             long start = System.nanoTime();
@@ -1268,19 +1274,26 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             completeCallbacks(numCallbacks, count, null);
 
-            // A sync that came during the read, its wakeup perhaps spent there, is read for next,
-            // rather than wait on a poll that its wakeup no longer cuts short.
+            // A sync that came during the read, which did not wake it, is read for next, rather
+            // than wait on the idle poll. From here, under the same lock, a sync wakes that poll.
             synchronized (KafkaCache.this) {
                 if (!syncCallbacks.isEmpty()) {
                     return;
                 }
+                readerIdle = true;
             }
-            // close() stops the thread before it wakes the consumer, and the read may have spent
-            // that wakeup, so a poll now could wait for good.
-            if (!isRunning()) {
-                return;
+            try {
+                // close() stops the thread before it wakes the consumer, and the read may have
+                // spent that wakeup, so a poll now could wait for good.
+                if (!isRunning()) {
+                    return;
+                }
+                poll();
+            } finally {
+                synchronized (KafkaCache.this) {
+                    readerIdle = false;
+                }
             }
-            poll();
         }
 
         @Override

@@ -38,6 +38,7 @@ import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.Test;
 
@@ -82,7 +83,8 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
     }
 
     // A topic deleted as it is read never reaches the end offsets taken at the start: the read
-    // gives up once it has not moved for the init timeout, rather than poll for good.
+    // gives up, as a timeout, once it has not moved for the init timeout, rather than poll for
+    // good.
     @Test
     public void testAReadOfATopicDeletedAsItIsReadFails() throws Exception {
         String topic = "deleted-as-read";
@@ -123,6 +125,7 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
             fail("init should fail");
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof CacheInitializationException);
+            assertTrue(e.getCause().getCause() instanceof RetriableException);
         }
         reader.close();
     }

@@ -301,7 +301,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             this.kafkaTopicReader = new WorkerThread();
             try {
                 count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
-            } catch (IOException e) {
+            } catch (IOException | org.apache.kafka.common.errors.TimeoutException e) {
                 throw new CacheInitializationException("Failed to read to end offsets", e);
             }
         } catch (RuntimeException e) {
@@ -994,9 +994,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // however long it takes.
             Map<TopicPartition, Long> positions = positions(endOffsets.keySet(), timeout);
             long lastMoved = System.nanoTime();
-            // A poll that waited longer than the timeout could wait for good on a deleted topic.
-            Duration pollFor = Duration.ofMillis(Math.min(pollTimeout, timeout.toMillis()));
             while (!hasReadToEndOffsets(endOffsets, timeout)) {
+                // A poll waits no longer than the read has left before it gives up.
+                long left = timeout.toNanos() - (System.nanoTime() - lastMoved);
+                Duration pollFor = Duration.ofNanos(
+                    Math.max(0, Math.min(TimeUnit.MILLISECONDS.toNanos(pollTimeout), left)));
                 try {
                     count += poll(pollFor);
                 } catch (InvalidOffsetException e) {
@@ -1013,9 +1015,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (!now.equals(positions)) {
                     positions = now;
                     lastMoved = System.nanoTime();
-                } else if (System.nanoTime() - lastMoved > timeout.toNanos()) {
-                    throw new IOException("Reading topic " + topic + " made no progress for "
-                        + timeout.toMillis() + " ms, short of end offsets " + endOffsets);
+                } else if (System.nanoTime() - lastMoved >= timeout.toNanos()) {
+                    // A timeout, as a stalled broker may yet answer: a caller may try again.
+                    throw new org.apache.kafka.common.errors.TimeoutException("Reading topic "
+                        + topic + " made no progress for " + timeout.toMillis()
+                        + " ms, short of end offsets " + endOffsets);
                 }
             }
             log.info("During init or sync, processed {} records from topic {}", count, topic);

@@ -34,6 +34,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.Test;
 
@@ -131,7 +132,7 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
     }
 
     // A sync whose read stops short of the end offsets it took, its topic deleted, fails once
-    // the read has not moved for the timeout.
+    // the read has not moved for the timeout, as a timeout a caller may try again after.
     @Test
     public void testASyncWhoseReadStopsMovingFails() throws Exception {
         String topic = "sync-stops-moving";
@@ -168,7 +169,7 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
                 fail("sync should fail");
             } catch (ExecutionException e) {
                 assertTrue(e.getCause() instanceof CacheException);
-                assertTrue(e.getCause().getCause() instanceof IOException);
+                assertTrue(e.getCause().getCause() instanceof RetriableException);
             }
         } finally {
             handler.releaseAll();

@@ -358,13 +358,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         if (consumer != null) {
             consumer.wakeup();
         }
-        int count = 0;
         try {
-            count = future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.warn("Failed to read to end offsets", e);
+            return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CacheException("Sync operation interrupted while reading to end offsets", e);
+        } catch (ExecutionException e) {
+            throw new CacheException("Failed to read to end offsets", e.getCause());
         }
-        return count;
     }
 
     private Properties getConsumerProperties() {
@@ -1079,25 +1080,37 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (numCallbacks > 0) {
                 try {
                     count = readToEndOffsets(Duration.ofMillis(timeout));
+                } catch (WakeupException e) {
+                    // Another sync woke the read: restart the doWork() loop, for all the syncs.
+                    return;
                 } catch (KafkaException | IOException e) {
                     log.error("Error while reading to end offsets", e);
-                    // Restart the doWork() loop
+                    // A retry could fail for good, as on a deleted topic: the syncs fail instead.
+                    completeCallbacks(numCallbacks, 0, e);
                     return;
                 }
             }
 
+            completeCallbacks(numCallbacks, count, null);
+
+            poll();
+        }
+
+        private void completeCallbacks(int numCallbacks, int count, Throwable error) {
             synchronized (KafkaCache.this) {
                 // Only invoke exactly the number of callbacks we found before the read to log end
                 // since it is possible for another write + sync to sneak in the meantime
                 for (int i = 0; i < numCallbacks; i++) {
                     CompletableFuture<Integer> cb = syncCallbacks.poll();
                     if (cb != null) {
-                        cb.complete(count);
+                        if (error != null) {
+                            cb.completeExceptionally(error);
+                        } else {
+                            cb.complete(count);
+                        }
                     }
                 }
             }
-
-            poll();
         }
 
         private int poll() {

@@ -299,7 +299,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             // start the background thread that subscribes to the Kafka topic and applies updates.
             // the thread must be created after the topic has been created.
-            this.kafkaTopicReader = new WorkerThread();
+            try {
+                // It finds the partitions and seeks to where it starts, either of which may time
+                // out: a failure of init like any other.
+                this.kafkaTopicReader = new WorkerThread();
+            } catch (org.apache.kafka.common.errors.TimeoutException e) {
+                throw new CacheInitializationException(
+                    "Timed out trying to start reading topic " + topic, e);
+            }
             try {
                 count = this.kafkaTopicReader.readToEndOffsets(Duration.ofMillis(initTimeout));
             } catch (IOException | org.apache.kafka.common.errors.TimeoutException e) {
@@ -377,7 +384,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Thread.currentThread().interrupt();
             throw new CacheException("Sync operation interrupted while reading to end offsets", e);
         } catch (ExecutionException e) {
-            throw new CacheException("Failed to read to end offsets", e.getCause());
+            Throwable cause = e.getCause();
+            if (cause instanceof org.apache.kafka.common.errors.TimeoutException) {
+                // As for put(): a timeout a caller may try again after.
+                throw new CacheTimeoutException("Timed out reading to end offsets", cause);
+            }
+            throw new CacheException("Failed to read to end offsets", cause);
         }
     }
 

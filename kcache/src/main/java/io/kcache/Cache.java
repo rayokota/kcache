@@ -16,7 +16,9 @@
 
 package io.kcache;
 
+import io.kcache.exceptions.CacheException;
 import io.kcache.exceptions.CacheInitializationException;
+import io.kcache.exceptions.CacheTimeoutException;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -54,6 +56,10 @@ public interface Cache<K, V> extends SortedMap<K, V>, Configurable, Closeable {
 
     /**
      * Syncs (or re-initializes) the cache with the backing store.
+     *
+     * @throws CacheTimeoutException if the sync times out, as when the backing store does not
+     *     answer in time; a caller may try again
+     * @throws CacheException if the sync fails otherwise, as when the cache is closed
      */
     void sync();
 

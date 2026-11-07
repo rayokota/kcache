@@ -18,6 +18,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.kcache.exceptions.CacheException;
+import io.kcache.exceptions.CacheTimeoutException;
 import io.kcache.utils.ClusterTestHarness;
 import io.kcache.utils.StringUpdateHandler;
 import java.io.IOException;
@@ -280,7 +281,7 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
                 sync.get(60, TimeUnit.SECONDS);
                 fail("sync should fail");
             } catch (ExecutionException e) {
-                assertTrue(e.getCause() instanceof CacheException);
+                assertTrue(e.getCause() instanceof CacheTimeoutException);
                 assertTrue(e.getCause().getCause() instanceof RetriableException);
             }
         } finally {

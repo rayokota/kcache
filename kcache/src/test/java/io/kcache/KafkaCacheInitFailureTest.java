@@ -61,6 +61,25 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         close.get(30, TimeUnit.SECONDS);
     }
 
+    // An init that times out as the reader thread is made, seeking back from the end offsets of
+    // partitions the topic does not have, fails as an init failure, as one that times out in
+    // the read does.
+    @Test
+    public void testAnInitThatTimesOutAsTheReaderIsMadeFailsAsAnInitFailure() throws Exception {
+        Properties props = properties("timed-out-seek");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_PARTITIONS_CONFIG, "0,1,2");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_PARTITIONS_OFFSET_CONFIG, "-1");
+        KafkaCache<String, String> cache = cache(props);
+        try {
+            cache.init();
+            fail("init should fail");
+        } catch (CacheInitializationException e) {
+            assertTrue(e.getCause() instanceof RetriableException);
+        } finally {
+            cache.close();
+        }
+    }
+
     // An init that fails as the reader thread is made, since the topic does not exist.
     @Test
     public void testAFailedInitLeavesNoConsumer() throws Exception {

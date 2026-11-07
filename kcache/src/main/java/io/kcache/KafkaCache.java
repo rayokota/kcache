@@ -124,6 +124,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private KafkaCacheConfig config;
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
     private final Queue<CompletableFuture<Integer>> syncCallbacks = new ArrayDeque<>();
+    // Guarded by this: once the reader thread has stopped, no sync is read for.
+    private boolean readerStopped;
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -353,6 +355,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private int waitUntilEndOffsets() throws CacheException {
         CompletableFuture<Integer> future = new CompletableFuture<>();
         synchronized (this) {
+            if (readerStopped) {
+                throw new CacheException(readerStoppedMessage());
+            }
             syncCallbacks.add(future);
         }
         if (consumer != null) {
@@ -366,6 +371,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } catch (ExecutionException e) {
             throw new CacheException("Failed to read to end offsets", e.getCause());
         }
+    }
+
+    private String readerStoppedMessage() {
+        return "The reader thread for " + clientId + " has stopped, as when the cache is closed";
     }
 
     private Properties getConsumerProperties() {
@@ -1094,6 +1103,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             completeCallbacks(numCallbacks, count, null);
 
             poll();
+        }
+
+        @Override
+        public void run() {
+            try {
+                super.run();
+            } finally {
+                // No read follows: the syncs waiting fail, and so do any that come later.
+                synchronized (KafkaCache.this) {
+                    readerStopped = true;
+                    CacheException error = new CacheException(readerStoppedMessage());
+                    for (CompletableFuture<Integer> cb; (cb = syncCallbacks.poll()) != null; ) {
+                        cb.completeExceptionally(error);
+                    }
+                }
+            }
         }
 
         private void completeCallbacks(int numCallbacks, int count, Throwable error) {

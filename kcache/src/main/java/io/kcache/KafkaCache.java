@@ -1074,6 +1074,18 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     count = 0;
                 }
                 Map<TopicPartition, Long> now = positions(endOffsets.keySet(), timeout);
+                // A position goes back only when the consumer resets it, as the log has ended
+                // below it: the topic was deleted and created again, or truncated, so the end
+                // offsets taken no longer hold. Such a read is no progress, but a failure.
+                for (Map.Entry<TopicPartition, Long> entry : now.entrySet()) {
+                    Long before = positions.get(entry.getKey());
+                    if (before != null && entry.getValue() < before) {
+                        throw new IOException("Reading topic " + topic + " went back from offset "
+                            + before + " to " + entry.getValue() + " on " + entry.getKey()
+                            + ", short of end offsets " + endOffsets
+                            + ": the topic was deleted or truncated as it was read");
+                    }
+                }
                 if (!now.equals(positions)) {
                     positions = now;
                     lastMoved = System.nanoTime();

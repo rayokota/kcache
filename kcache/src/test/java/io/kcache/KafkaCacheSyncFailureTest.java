@@ -36,9 +36,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.junit.Test;
 
@@ -382,6 +384,72 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         } finally {
             handler.releaseAll();
             reader.close();
+        }
+    }
+
+    // A sync whose topic is deleted and created again as it is read, its position going back as
+    // the consumer resets it, fails, rather than count the reset as progress and read on toward
+    // end offsets that no longer hold, and not as a timeout.
+    @Test
+    public void testASyncWhoseTopicIsCreatedAgainAsItIsReadFails() throws Exception {
+        String topic = "created-again-as-read";
+        HoldingHandler handler = new HoldingHandler(0, 1);
+        Properties props = properties("created-again-as-read", topic);
+        // A record at a time, so that most are still to be fetched once the topic is gone.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        KafkaCache<String, String> reader = cache(props, handler);
+        try {
+            try (KafkaCache<String, String> writer =
+                     cache(properties("created-again-as-read-writer", topic))) {
+                writer.init();
+                reader.init();
+                for (int i = 0; i < 20; i++) {
+                    writer.put("k" + i, "v" + i);
+                }
+            }
+            // The reader thread holds record 0 as it polls; the sync's read then holds record 1,
+            // after taking the end offsets.
+            handler.awaitEntered(0);
+            FutureTask<Void> sync = start(reader::sync);
+            awaitWaitingIn(thread(sync), "waitUntilEndOffsets");
+            handler.release(0);
+            handler.awaitEntered(1);
+            try (Admin admin = Admin.create(Collections.singletonMap(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
+                admin.deleteTopics(Collections.singletonList(topic)).all().get(30, TimeUnit.SECONDS);
+                createAgain(admin, topic);
+            }
+            handler.release(1);
+
+            try {
+                sync.get(60, TimeUnit.SECONDS);
+                fail("sync should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheException);
+                assertFalse(e.getCause() instanceof CacheTimeoutException);
+                assertTrue(e.getCause().getCause() instanceof IOException);
+            }
+        } finally {
+            handler.releaseAll();
+            reader.close();
+        }
+    }
+
+    // Creates the topic again once its deletion is done, which the broker finishes after it
+    // answers the delete.
+    private static void createAgain(Admin admin, String topic) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (true) {
+            try {
+                admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1)))
+                    .all().get(30, TimeUnit.SECONDS);
+                return;
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof TopicExistsException
+                    && System.nanoTime() < deadline);
+                Thread.sleep(100);
+            }
         }
     }
 

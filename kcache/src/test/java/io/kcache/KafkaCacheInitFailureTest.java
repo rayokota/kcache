@@ -95,9 +95,11 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         cache.close();
     }
 
+    // Deleted topics stay deleted, rather than coming back empty on the reader's next fetch.
     @Override
     protected void injectProperties(Properties props) {
         super.injectProperties(props);
+        props.setProperty("auto.create.topics.enable", "false");
         props.setProperty("delete.topic.enable", "true");
     }
 

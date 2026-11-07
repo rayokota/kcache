@@ -42,7 +42,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -128,8 +127,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
     private final Queue<CompletableFuture<Integer>> syncCallbacks = new ArrayDeque<>();
     // Guarded by this: once the reader thread has stopped, no sync is read for; and what it died
-    // of, if it did, rather than stop as the cache closed.
-    private boolean readerStopped;
+    // of, if it did, rather than stop as the cache closed. Written under the lock, but read
+    // without it by syncs waiting for their own writes.
+    private volatile boolean readerStopped;
     private Throwable readerFailure;
 
     public KafkaCache(String bootstrapServers,
@@ -372,10 +372,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException("Illegal state while initializing cache for " + clientId
                 + ". Cache was already initialized");
         }
-        cacheUpdateHandler.cacheInitialized(count, checkpoints);
-        synchronized (this) {
-            initDone = true;
-            notifyAll();
+        try {
+            cacheUpdateHandler.cacheInitialized(count, checkpoints);
+        } finally {
+            // The cache is initialized, its reader running, even if the handler throws: syncs go
+            // on, rather than fail for good on a cache that init cannot be tried again on.
+            synchronized (this) {
+                initDone = true;
+                notifyAll();
+            }
         }
     }
 
@@ -1099,8 +1104,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // A topic deleted or truncated as it is read never reaches the end offsets taken, so
             // a read that has not moved for the timeout gives up, while one that moves goes on
             // however long it takes.
-            Map<TopicPartition, Long> positions = positions(endOffsets.keySet(), timeout);
             long lastMoved = System.nanoTime();
+            Map<TopicPartition, Long> positions =
+                positions(endOffsets.keySet(), lastMoved + timeout.toNanos());
             // The positions last taken serve for both, as nothing moves them in between.
             while (!hasReadToEndOffsets(endOffsets, positions)) {
                 // A poll swallows the wakeup from close(), so the read stops for it here instead.
@@ -1111,19 +1117,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 long left = timeout.toNanos() - (System.nanoTime() - lastMoved);
                 Duration pollFor = Duration.ofNanos(
                     Math.max(0, Math.min(TimeUnit.MILLISECONDS.toNanos(pollTimeout), left)));
-                try {
-                    count += poll(pollFor, false);
-                } catch (InvalidOffsetException e) {
-                    if (localCache.isPersistent()) {
-                        localCache.close();
-                        localCache.destroy();
-                        localCache.init();
-                    }
-                    log.warn("Seeking to start due to invalid offset", e);
-                    seekToStart(assignment, timeout);
-                    count = 0;
-                }
-                Map<TopicPartition, Long> now = positions(endOffsets.keySet(), timeout);
+                count += poll(pollFor, false);
+                Map<TopicPartition, Long> now =
+                    positions(endOffsets.keySet(), lastMoved + timeout.toNanos());
                 // A position goes back only when the consumer resets it, as the log has ended
                 // below it: the topic was deleted and created again, or truncated, so the end
                 // offsets taken no longer hold. Such a read is no progress, but a failure.
@@ -1192,11 +1188,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
         }
 
+        // The positions, each looked up with what is left before the deadline, so that together
+        // they wait no longer than the read has left.
         private Map<TopicPartition, Long> positions(Collection<TopicPartition> topicPartitions,
-                                                    Duration timeout) {
+                                                    long deadlineNanos) {
             Map<TopicPartition, Long> positions = new HashMap<>();
             for (TopicPartition tp : topicPartitions) {
-                positions.put(tp, position(tp, timeout));
+                Duration left = Duration.ofNanos(Math.max(0, deadlineNanos - System.nanoTime()));
+                positions.put(tp, position(tp, left));
             }
             return positions;
         }
@@ -1288,6 +1287,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 throw e;
             } finally {
                 stopSyncs(failure);
+                // Here as well as in shutdown(), for a close() on this thread, which cannot wait
+                // for it to stop.
+                closeConsumer();
             }
         }
 
@@ -1306,6 +1308,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 for (CompletableFuture<Integer> cb; (cb = syncCallbacks.poll()) != null; ) {
                     cb.completeExceptionally(error);
                 }
+            }
+            // Syncs waiting for their own writes, which no read will reach now, stop waiting.
+            // Signalled outside the lock on the cache, which those syncs take inside this one.
+            offsetUpdateLock.lock();
+            try {
+                offsetReachedThreshold.signalAll();
+            } finally {
+                offsetUpdateLock.unlock();
             }
         }
 
@@ -1343,6 +1353,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 count = records.count();
                 cacheUpdateHandler.startBatch(count);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
+                    // Once the thread is stopping, as for a close() from an update handler on
+                    // this thread, which closes the local cache and checkpoints as it returns, no
+                    // more is applied, so none is checkpointed past what was stored.
+                    if (!isRunning()) {
+                        break;
+                    }
                     try {
                         K messageKey;
                         try {
@@ -1420,7 +1436,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         updateOffset(record.partition(), record.offset());
                     }
                 }
-                if (localCache.isPersistent() && (checkpointBeforeInit || initialized.get())) {
+                if (isRunning() && localCache.isPersistent()
+                    && (checkpointBeforeInit || initialized.get())) {
                     try {
                         localCache.flush();
                         Map<TopicPartition, Long> offsets = cacheUpdateHandler.checkpoint(count);
@@ -1517,7 +1534,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             try {
                 offsetUpdateLock.lock();
                 long timeoutNs = timeout.toNanos();
-                while (countUnreadOffsets(lastOffsets) > 0 && timeoutNs > 0) {
+                while (countUnreadOffsets(lastOffsets) > 0 && timeoutNs > 0 && !readerStopped) {
                     try {
                         timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
                     } catch (InterruptedException e) {
@@ -1532,10 +1549,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
             if (countUnreadOffsets(lastOffsets) == 0) {
                 return count;
-            } else {
+            } else if (!readerStopped) {
                 log.warn("Could not read to last written offsets {}", lastOffsets);
             }
-
+            // As when the reader thread has stopped: the sync then fails at once.
             return -1;
         }
 
@@ -1557,7 +1574,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         /**
          * Waits for the thread to stop even when interrupted, as a thread still running would go
          * on reading into the local cache and checkpointing past what it stored, once close()
-         * has closed them. An interrupt is restored once the thread has stopped.
+         * has closed them. An interrupt is restored once the thread has stopped. On the thread
+         * itself, as from an update handler, it only asks the thread to stop, which it does once
+         * the handler returns.
          */
         @Override
         public void shutdown() {
@@ -1567,17 +1586,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (consumer != null) {
                 consumer.wakeup();
             }
+            if (Thread.currentThread() == this) {
+                return;
+            }
             boolean interrupted = false;
             while (true) {
                 try {
                     super.awaitShutdown();
+                    // The thread counts its shutdown down before it stops the syncs, recording
+                    // what it died of, and before it ends: joining it waits for both.
+                    join();
                     break;
                 } catch (InterruptedException e) {
                     interrupted = true;
                 }
             }
-            // The thread counts its shutdown down before it stops the syncs itself, so a sync
-            // that follows close() could otherwise still find the reader running.
+            // For a thread that never started, which stops no syncs itself.
             stopSyncs(null);
             closeConsumer();
             if (interrupted) {

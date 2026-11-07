@@ -127,8 +127,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private KafkaCacheConfig config;
     private final Map<Integer, Long> lastWrittenOffsets = new ConcurrentHashMap<>();
     private final Queue<CompletableFuture<Integer>> syncCallbacks = new ArrayDeque<>();
-    // Guarded by this: once the reader thread has stopped, no sync is read for.
+    // Guarded by this: once the reader thread has stopped, no sync is read for; and what it died
+    // of, if it did, rather than stop as the cache closed.
     private boolean readerStopped;
+    private Throwable readerFailure;
 
     public KafkaCache(String bootstrapServers,
                       Serde<K> keySerde,
@@ -399,7 +401,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // its own writes, which a stopped reader thread may already have read.
         synchronized (this) {
             if (readerStopped) {
-                throw new CacheException(readerStoppedMessage());
+                throw readerStoppedException();
             }
         }
 
@@ -419,7 +421,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         CompletableFuture<Integer> future = new CompletableFuture<>();
         synchronized (this) {
             if (readerStopped) {
-                throw new CacheException(readerStoppedMessage());
+                throw readerStoppedException();
             }
             syncCallbacks.add(future);
         }
@@ -441,8 +443,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
     }
 
-    private String readerStoppedMessage() {
-        return "The reader thread for " + clientId + " has stopped, as when the cache is closed";
+    // Guarded by this.
+    private CacheException readerStoppedException() {
+        return readerFailure != null
+            ? new CacheException("The reader thread for " + clientId + " has died", readerFailure)
+            : new CacheException(
+                "The reader thread for " + clientId + " has stopped, as the cache was closed");
     }
 
     /**
@@ -1274,18 +1280,29 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         @Override
         public void run() {
+            Throwable failure = null;
             try {
                 super.run();
+            } catch (RuntimeException | Error e) {
+                failure = e;
+                throw e;
             } finally {
-                stopSyncs();
+                stopSyncs(failure);
             }
         }
 
-        // No read follows: the syncs waiting fail, and so do any that come later.
-        private void stopSyncs() {
+        /**
+         * No read follows: the syncs waiting fail, and so do any that come later, with what the
+         * thread died of, if it did. Called by the thread as it stops, and by close() once it
+         * has, in either order, so a failure already known is kept.
+         */
+        private void stopSyncs(Throwable failure) {
             synchronized (KafkaCache.this) {
                 readerStopped = true;
-                CacheException error = new CacheException(readerStoppedMessage());
+                if (readerFailure == null) {
+                    readerFailure = failure;
+                }
+                CacheException error = readerStoppedException();
                 for (CompletableFuture<Integer> cb; (cb = syncCallbacks.poll()) != null; ) {
                     cb.completeExceptionally(error);
                 }
@@ -1561,7 +1578,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             // The thread counts its shutdown down before it stops the syncs itself, so a sync
             // that follows close() could otherwise still find the reader running.
-            stopSyncs();
+            stopSyncs(null);
             closeConsumer();
             if (interrupted) {
                 Thread.currentThread().interrupt();

@@ -1012,6 +1012,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Map<TopicPartition, Long> positions = positions(endOffsets.keySet(), timeout);
             long lastMoved = System.nanoTime();
             while (!hasReadToEndOffsets(endOffsets, timeout)) {
+                // A poll swallows the wakeup from close(), so the read stops for it here instead.
+                if (!isRunning()) {
+                    throw new WakeupException();
+                }
                 // A poll waits no longer than the read has left before it gives up.
                 long left = timeout.toNanos() - (System.nanoTime() - lastMoved);
                 Duration pollFor = Duration.ofNanos(
@@ -1160,6 +1164,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (!syncCallbacks.isEmpty()) {
                     return;
                 }
+            }
+            // close() stops the thread before it wakes the consumer, and the read may have spent
+            // that wakeup, so a poll now could wait for good.
+            if (!isRunning()) {
+                return;
             }
             poll();
         }

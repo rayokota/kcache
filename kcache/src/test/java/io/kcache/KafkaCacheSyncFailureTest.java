@@ -198,6 +198,56 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
+    // A close as a sync's read goes on returns once the record in hand is done, rather than wait
+    // for the read to end and then on an idle topic for good, as the read spends the close's
+    // wakeup; the sync fails.
+    @Test
+    public void testACloseDuringASyncsReadReturns() throws Exception {
+        String topic = "close-during-read";
+        HoldingHandler handler = new HoldingHandler(0, 1);
+        Properties props = properties("close-during-read", topic);
+        // A record at a time, so that the sync's read polls again for each.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        KafkaCache<String, String> reader = cache(props, handler);
+        try {
+            try (KafkaCache<String, String> writer =
+                     cache(properties("close-during-read-writer", topic))) {
+                writer.init();
+                reader.init();
+                for (int i = 0; i < 3; i++) {
+                    writer.put("k" + i, "v" + i);
+                }
+            }
+            // The reader thread holds record 0 as it polls; the sync's read then holds record 1,
+            // with record 2 still to read.
+            handler.awaitEntered(0);
+            FutureTask<Void> sync = start(reader::sync);
+            awaitWaitingIn(thread(sync), "waitUntilEndOffsets");
+            handler.release(0);
+            handler.awaitEntered(1);
+            FutureTask<Void> close = start(() -> {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+            awaitWaitingIn(thread(close), "awaitShutdown");
+            handler.release(1);
+
+            close.get(30, TimeUnit.SECONDS);
+            try {
+                sync.get(30, TimeUnit.SECONDS);
+                fail("sync should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheException);
+            }
+        } finally {
+            handler.releaseAll();
+        }
+    }
+
     // A close on the thread of a sync that was interrupted still waits for the reader thread to
     // stop, rather than close the local cache under it, and keeps the interrupt.
     @Test

@@ -445,6 +445,22 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         return "The reader thread for " + clientId + " has stopped, as when the cache is closed";
     }
 
+    /**
+     * Whether a read to end offsets moved between two takes of its positions. The later take
+     * covers only the partitions still short of their end offsets: one that has reached its own
+     * drops out of it, which is no move, so that a read stalled beside it times out after one
+     * timeout rather than two.
+     */
+    static boolean hasMoved(Map<TopicPartition, Long> before, Map<TopicPartition, Long> now) {
+        for (Map.Entry<TopicPartition, Long> entry : now.entrySet()) {
+            Long position = before.get(entry.getKey());
+            if (position == null || entry.getValue() > position) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Properties getConsumerProperties() {
         Properties consumerProps = new Properties();
         addKafkaCacheConfigsToClientProperties(consumerProps);
@@ -1114,8 +1130,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                             + ": the topic was deleted or truncated as it was read");
                     }
                 }
-                if (!now.equals(positions)) {
-                    positions = now;
+                boolean moved = hasMoved(positions, now);
+                positions = now;
+                if (moved) {
                     lastMoved = System.nanoTime();
                 } else if (System.nanoTime() - lastMoved >= timeout.toNanos()) {
                     // A timeout, as a stalled broker may yet answer: a caller may try again.

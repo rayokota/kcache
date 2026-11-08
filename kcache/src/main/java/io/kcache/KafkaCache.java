@@ -112,7 +112,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private final AtomicBoolean restClosed = new AtomicBoolean(false);
     // What closing the rest failed with on the reader thread, closed from an update handler,
     // where nothing can throw it, so that the application's own close() throws it instead.
-    private final AtomicReference<Exception> readerCloseFailure = new AtomicReference<>();
+    private final AtomicReference<Throwable> readerCloseFailure = new AtomicReference<>();
     // Guarded by this: whether init has succeeded, so that syncs go on, and why it has not, once
     // init has failed or the cache is closed first, so that the syncs waiting for it fail.
     private boolean initDone;
@@ -1004,7 +1004,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         closeRest();
         // Once the reader has stopped, as shutdown() waits for, it has closed the rest if a
         // handler asked it to.
-        Exception failure = readerCloseFailure.getAndSet(null);
+        Throwable failure = readerCloseFailure.getAndSet(null);
         if (failure != null) {
             throw new IOException(
                 "Failed to close the Kafka cache for " + clientId + " on its reader thread",
@@ -1020,21 +1020,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             return;
         }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        Utils.closeQuietly(localCache, "Kafka cache local cache for " + clientId, failure);
-        Utils.closeQuietly(checkpointHandler, "Kafka cache checkpoints for " + clientId, failure);
-        Utils.closeQuietly(cacheUpdateHandler, "Kafka cache update handler for " + clientId,
-            failure);
-        Throwable t = failure.get();
-        if (t instanceof IOException) {
-            throw (IOException) t;
-        } else if (t instanceof RuntimeException) {
-            throw (RuntimeException) t;
-        } else if (t instanceof Error) {
-            throw (Error) t;
-        } else if (t != null) {
-            throw new IOException(t);
-        }
+        Closeables.closeAll("Kafka cache for " + clientId,
+            localCache, checkpointHandler, cacheUpdateHandler);
         log.info("Kafka cache shut down complete for {}", clientId);
     }
 
@@ -1361,9 +1348,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 if (closeOnStop) {
                     try {
                         closeRest();
-                    } catch (IOException | RuntimeException e) {
-                        log.warn("Failed to close the Kafka cache for {}", clientId, e);
-                        readerCloseFailure.set(e);
+                    } catch (Throwable t) {
+                        // Already logged; kept rather than thrown, so that it neither replaces
+                        // what the thread died of nor goes unreported.
+                        readerCloseFailure.set(t);
                     }
                 }
             }

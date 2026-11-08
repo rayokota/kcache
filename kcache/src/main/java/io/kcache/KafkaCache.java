@@ -411,9 +411,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } else {
                 log.warn("Failed to close the Kafka cache for {} after init", clientId, t);
                 // What another thread's close failed with, as the reader's, kept as it was, so
-                // that the application's close() wraps it once.
-                deferredCloseFailure.compareAndSet(null,
-                    t instanceof DeferredCloseException ? t.getCause() : t);
+                // that the application's close() wraps it once; with any failure kept already.
+                Throwable failure = t instanceof DeferredCloseException ? t.getCause() : t;
+                if (!deferredCloseFailure.compareAndSet(null, failure)) {
+                    Throwable kept = deferredCloseFailure.get();
+                    if (kept != null && kept != failure) {
+                        kept.addSuppressed(failure);
+                    }
+                }
             }
         }
     }
@@ -623,9 +628,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (cause instanceof CacheException) {
                 // Failed by stopSyncs(), as the reader stopped: as a sync after it fails, with
                 // an exception of its own, rather than the one all the syncs it failed share.
-                synchronized (this) {
-                    throw readerStoppedException();
-                }
+                // stopSyncs() marks the reader stopped first; a failure from anything else is
+                // wrapped as any other.
+                throwIfReaderStopped();
             }
             throw new CacheException("Failed to read to end offsets", cause);
         }

@@ -136,6 +136,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // Guarded by this: whether close() was called on the init thread, as from an update handler
     // during init, which cannot wait for init to end: init closes the cache once it ends.
     private boolean closeOnInitEnd;
+    // Guarded by this: whether init is doing that close, as it ends. Its thread stays initThread
+    // meanwhile, so that a close() waiting for init waits for that too, and finds what it failed
+    // with.
+    private boolean closingAfterInit;
     // Whether the rest of the cache is closed, by close() or by a reader thread closed from one
     // of its update handlers, so that it is closed once whichever does it first. Guarded by
     // restCloseLock.
@@ -368,14 +372,27 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         initFailure = failure;
                     }
                 }
-                initThread = null;
                 closeNow = closeOnInitEnd;
                 closeOnInitEnd = false;
-                // Syncs waiting for init, and a close() waiting for it to end, go on.
+                if (closeNow) {
+                    closingAfterInit = true;
+                } else {
+                    initThread = null;
+                }
+                // Syncs waiting for init go on, and a close() waiting for it to end, unless init
+                // still closes the cache.
                 notifyAll();
             }
             if (closeNow) {
-                closeAfterInit(failure);
+                try {
+                    closeAfterInit(failure);
+                } finally {
+                    synchronized (this) {
+                        closingAfterInit = false;
+                        initThread = null;
+                        notifyAll();
+                    }
+                }
             }
         }
     }
@@ -1156,28 +1173,34 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 markClosedBeforeReady();
                 stopInit();
             }
-            if (initThread != null && (current == initThread || current == kafkaTopicReader)) {
+            boolean onInitThread = current == initThread;
+            boolean onReader = current == kafkaTopicReader;
+            if (initThread != null && !closingAfterInit && (onInitThread || onReader)) {
                 // From an update handler during init, on the init thread, or on the reader
                 // thread while init's cacheInitialized() handler runs, neither of which can wait
                 // for init to end: init closes the cache once it ends, rather than have it closed
                 // under its handler. A reader thread stops now, leaving the rest to init.
                 closeOnInitEnd = true;
-                if (current == kafkaTopicReader) {
+                if (onReader) {
                     kafkaTopicReader.stopRead();
                 }
                 return;
             }
-            // Waits for init to end, so as to close nothing init still uses.
-            boolean interrupted = false;
-            while (initThread != null) {
-                try {
-                    wait();
-                } catch (InterruptedException e) {
-                    interrupted = true;
+            // Waits for init to end, and for the close it does as it ends, so as to close nothing
+            // init still uses. Not on the init thread, as that close itself, nor on the reader
+            // thread, which that close waits for.
+            if (!onInitThread && !onReader) {
+                boolean interrupted = false;
+                while (initThread != null) {
+                    try {
+                        wait();
+                    } catch (InterruptedException e) {
+                        interrupted = true;
+                    }
                 }
-            }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
             }
             if (lifecycle != Lifecycle.READY && lifecycle != Lifecycle.CLOSED) {
                 markClosedBeforeReady();
@@ -1546,6 +1569,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
             }
 
+            if (!isRunning()) {
+                // Asked to stop during the read, as by a close() from an update handler, which
+                // closes the local cache once the thread stops: the syncs fail with the others,
+                // rather than go on to a local cache being closed.
+                return;
+            }
             completeCallbacks(numCallbacks, count, null);
 
             // A sync that came during the read, which did not wake it, is read for next, rather
@@ -1575,9 +1604,11 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             Throwable failure = null;
             try {
                 super.run();
-            } catch (RuntimeException | Error e) {
-                failure = e;
-                throw e;
+            } catch (Throwable t) {
+                // Any failure, as a checked exception thrown sneakily from a batch handler, so
+                // that the syncs fail with what the thread died of, not as if the cache closed.
+                failure = t;
+                throw t;
             } finally {
                 stopSyncs(failure);
                 closeConsumer();

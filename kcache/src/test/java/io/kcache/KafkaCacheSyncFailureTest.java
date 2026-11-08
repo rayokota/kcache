@@ -477,6 +477,73 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
+    // A close() from an update handler on the last record of a sync's read fails that sync,
+    // rather than let it go on to the local cache that the reader closes as it stops.
+    @Test
+    public void testACloseFromAHandlerOnASyncsReadFailsTheSync() throws Exception {
+        String topic = "close-from-handler-on-read";
+        HoldThenClose handler = new HoldThenClose();
+        KafkaCache<String, String> reader = cache(
+            properties("close-from-handler-on-read", topic), handler);
+        handler.cache = reader;
+        try (KafkaCache<String, String> writer =
+                 cache(properties("close-from-handler-on-read-writer", topic))) {
+            writer.init();
+            reader.init();
+            // Offset 0 holds the reader thread, so that offset 1 is read by the sync's read.
+            writer.put("k0", "v0");
+            assertTrue(handler.held.await(30, TimeUnit.SECONDS));
+            writer.put("k1", "v1");
+            FutureTask<Void> sync = start(reader::sync);
+            awaitWaitingIn(thread(sync), "waitUntilEndOffsets");
+            handler.release.countDown();
+            try {
+                sync.get(30, TimeUnit.SECONDS);
+                fail("sync should fail");
+            } catch (ExecutionException e) {
+                assertTrue(e.getCause() instanceof CacheException);
+            }
+            assertTrue(handler.closed.get());
+        } finally {
+            handler.release.countDown();
+            reader.close();
+        }
+    }
+
+    /**
+     * On the reader thread, holds the record at offset 0 until released, and closes its cache
+     * from the record at offset 1.
+     */
+    private static class HoldThenClose extends StringUpdateHandler {
+        volatile KafkaCache<String, String> cache;
+        final CountDownLatch held = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final AtomicBoolean closed = new AtomicBoolean();
+
+        @Override
+        public void handleUpdate(String key, String value, String oldValue,
+                                 TopicPartition tp, long offset, long timestamp) {
+            super.handleUpdate(key, value, oldValue, tp, offset, timestamp);
+            if (!Thread.currentThread().getName().startsWith("kafka-cache-reader-thread")) {
+                return;
+            }
+            if (offset == 0) {
+                held.countDown();
+                try {
+                    release.await(60, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            } else if (offset == 1 && closed.compareAndSet(false, true)) {
+                try {
+                    cache.close();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
+        }
+    }
+
     // A close() from an update handler, on the reader thread, does not wait for that thread for
     // good, and closes the local cache and the handler only once the thread has done with them,
     // and only once, though the application then closes the cache too.

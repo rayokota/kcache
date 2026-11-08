@@ -120,8 +120,8 @@ public class CompositeCacheUpdateHandler<K, V> implements CacheUpdateHandler<K, 
         }
     }
 
-    // Closes each handler though one before it fails, and throws the first failure, with the
-    // others logged.
+    // Closes each handler though one before it fails. Every failure is logged, and the first is
+    // thrown.
     @Override
     public void close() throws IOException {
         Closeables.closeAll("cache update handler", handlers.toArray(new Closeable[0]));

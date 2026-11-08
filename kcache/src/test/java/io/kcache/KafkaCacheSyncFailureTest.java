@@ -607,6 +607,9 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             assertEquals(1, localCache.closes.get());
             assertEquals(1, handler.closes.get());
         } finally {
+            // So that, if the reader has not closed the local cache, its failure to close does not
+            // hide why the test failed.
+            localCache.closeFailure = null;
             reader.close();
         }
         assertEquals(1, localCache.closes.get());

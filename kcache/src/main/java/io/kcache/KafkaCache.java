@@ -410,7 +410,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 initFailed.addSuppressed(t);
             } else {
                 log.warn("Failed to close the Kafka cache for {} after init", clientId, t);
-                deferredCloseFailure.compareAndSet(null, t);
+                // What another thread's close failed with, as the reader's, kept as it was, so
+                // that the application's close() wraps it once.
+                deferredCloseFailure.compareAndSet(null,
+                    t instanceof DeferredCloseException ? t.getCause() : t);
             }
         }
     }
@@ -1228,8 +1231,15 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // Not wrapped in a checked exception, which a caller might catch and go on after.
             throw (Error) failure;
         } else if (failure != null) {
-            throw new IOException("Failed to close the Kafka cache for " + clientId
-                + " on the thread a close() was left to", failure);
+            throw new DeferredCloseException(clientId, failure);
+        }
+    }
+
+    /** A close() that fails with what a close() left to another thread failed with. */
+    private static class DeferredCloseException extends IOException {
+        DeferredCloseException(String clientId, Throwable cause) {
+            super("Failed to close the Kafka cache for " + clientId
+                + " on the thread a close() was left to", cause);
         }
     }
 

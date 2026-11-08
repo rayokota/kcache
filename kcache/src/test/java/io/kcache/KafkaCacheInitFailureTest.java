@@ -212,6 +212,63 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         assertEquals(1, localCache.closes.get());
     }
 
+    // A close() that waits for init waits too for the close that a handler asked for during init,
+    // which init does as it ends, and throws what that close failed with.
+    @Test
+    public void testACloseWaitingForInitGetsTheFailureOfTheCloseInitDoes() throws Exception {
+        BlockingInitCache localCache = new BlockingInitCache();
+        localCache.release.countDown();
+        localCache.closeFailure = new UncheckedIOException(new IOException("close failed"));
+        ClosingAsInitialized handler = new ClosingAsInitialized();
+        KafkaCache<String, String> cache = new KafkaCache<>(
+            new KafkaCacheConfig(properties("close-waiting-for-deferred-close")),
+            Serdes.String(), Serdes.String(), handler, localCache);
+        handler.cache = cache;
+        Started init = start(cache::init);
+        Started close;
+        try {
+            assertTrue(handler.entered.await(30, TimeUnit.SECONDS));
+            close = start(cache::close);
+            awaitWaiting(close);
+        } finally {
+            handler.release.countDown();
+        }
+        // Init succeeded, and closed the cache as it ended.
+        init.get(30, TimeUnit.SECONDS);
+        try {
+            close.get(30, TimeUnit.SECONDS);
+            fail("close should fail");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof IOException);
+            // Wrapped once.
+            assertEquals(localCache.closeFailure, e.getCause().getCause());
+        }
+        assertEquals(1, localCache.closes.get());
+    }
+
+    /** Closes its cache from cacheInitialized(), then holds init until released. */
+    private static class ClosingAsInitialized extends StringUpdateHandler {
+        volatile KafkaCache<String, String> cache;
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public void cacheInitialized(int count, Map<TopicPartition, Long> checkpoints) {
+            super.cacheInitialized(count, checkpoints);
+            try {
+                cache.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            entered.countDown();
+            try {
+                release.await(60, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
     /** Closes its cache from the first update it handles. */
     private static class ClosingOnFirstUpdate extends StringUpdateHandler {
         volatile KafkaCache<String, String> cache;
@@ -300,10 +357,14 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
         final AtomicInteger closes = new AtomicInteger();
+        volatile RuntimeException closeFailure;
 
         @Override
         public void close() {
             closes.incrementAndGet();
+            if (closeFailure != null) {
+                throw closeFailure;
+            }
         }
 
         @Override

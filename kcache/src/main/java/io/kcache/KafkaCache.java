@@ -117,6 +117,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // init has failed or the cache is closed first, so that the syncs waiting for it fail.
     private boolean initDone;
     private Throwable initFailure;
+    // Guarded by this: whether close() has been called, so that no init follows it.
+    private boolean closed;
     private boolean skipValidation;
     private boolean requireCompact;
     private boolean readOnly;
@@ -288,13 +290,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
         }
-        if (restClosed.get()) {
-            // Its local cache and handlers are closed, and a close() after this init would not
-            // close the clients it made.
-            throw new CacheInitializationException(
-                "Illegal state while initializing cache for " + clientId + ". Cache was closed");
-        }
         synchronized (this) {
+            if (closed) {
+                // Its local cache and handlers are closed, or closing, and a close() after this
+                // init would not close the clients it made.
+                throw new CacheInitializationException(
+                    "Illegal state while initializing cache for " + clientId + ". Cache was closed");
+            }
             // A new init, as after one that failed: syncs wait for it, as for the first.
             initFailure = null;
         }
@@ -420,11 +422,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         }
         // Checked before either wait, as a cache that has written to every partition waits for
         // its own writes, which a stopped reader thread may already have read.
-        synchronized (this) {
-            if (readerStopped) {
-                throw readerStoppedException();
-            }
-        }
+        throwIfReaderStopped();
 
         int count = -1;
         if (kafkaTopicReader != null) {
@@ -442,9 +440,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         CompletableFuture<Integer> future = new CompletableFuture<>();
         boolean wake;
         synchronized (this) {
-            if (readerStopped) {
-                throw readerStoppedException();
-            }
+            throwIfReaderStopped();
             syncCallbacks.add(future);
             wake = readerIdle;
         }
@@ -469,6 +465,16 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     // Guarded by this.
+    // Fails once no reader will read, as the reader thread has died or the cache was closed,
+    // with what the thread died of, if it did.
+    private void throwIfReaderStopped() throws CacheException {
+        if (readerStopped) {
+            synchronized (this) {
+                throw readerStoppedException();
+            }
+        }
+    }
+
     private CacheException readerStoppedException() {
         return readerFailure != null
             ? new CacheException("The reader thread for " + clientId + " has died", readerFailure)
@@ -755,12 +761,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private RecordMetadata doPut(Supplier<List<Future<RecordMetadata>>> acksSupplier) {
         // No reader will apply the write, which would then fail once written: it fails unwritten
-        // instead, so that a caller trying it again does not write it twice.
-        if (readerStopped) {
-            synchronized (this) {
-                throw readerStoppedException();
-            }
-        }
+        // instead, so that the caller knows the record was not written, as before trying it
+        // again on another cache. A reader that stops just after this check still lets the
+        // write through.
+        throwIfReaderStopped();
         RecordMetadata recordMetadata = null;
         // The highest offset written to each partition by this call
         Map<Integer, Long> writtenOffsets = new HashMap<>();
@@ -994,6 +998,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     @Override
     public void close() throws IOException {
         synchronized (this) {
+            closed = true;
             if (!initDone) {
                 // No init follows that the syncs waiting for one could go on after.
                 initFailure = new CacheException(
@@ -1051,7 +1056,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
      * Waits for the cache to be initialized, as by another thread.
      *
      * @throws CacheException if init fails, or the cache is closed, before the cache is
-     *     initialized; a later init may still succeed
+     *     initialized; a later init may still succeed after a failed one, though never after
+     *     close
      */
     public void waitForInit() throws InterruptedException {
         synchronized (this) {
@@ -1603,11 +1609,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             if (lastReadOffsets.get(partition) < offset) {
                 // No reader will reach the offset: the write fails at once, as a sync does, with
                 // what the reader died of, rather than time out as one a caller may try again.
-                if (readerStopped) {
-                    synchronized (KafkaCache.this) {
-                        throw readerStoppedException();
-                    }
-                }
+                throwIfReaderStopped();
                 throw new CacheTimeoutException(
                     "KafkaCacheTopic thread failed to reach target offset within the timeout interval. "
                         + "targetOffset: " + offset + ", offsetReached: " + lastReadOffsets.get(partition)

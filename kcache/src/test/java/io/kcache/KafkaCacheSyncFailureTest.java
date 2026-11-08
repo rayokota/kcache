@@ -166,6 +166,27 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
+    // A put once the reader has stopped, as after close, fails before it writes anything, rather
+    // than write a record that no reader will apply.
+    @Test
+    public void testAPutAfterCloseFailsUnwritten() throws Exception {
+        String topic = "put-after-close";
+        KafkaCache<String, String> cache = cache(properties("put-after-close", topic));
+        cache.init();
+        cache.close();
+        try {
+            cache.put("k", "v");
+            fail("put should fail");
+        } catch (CacheException e) {
+            assertTrue(e.getMessage().contains("has stopped"));
+        }
+        try (KafkaCache<String, String> reader =
+                 cache(properties("put-after-close-reader", topic))) {
+            reader.init();
+            assertTrue(reader.isEmpty());
+        }
+    }
+
     // Syncs that keep coming, faster than the timeout, do not keep the read of a deleted topic
     // from failing: the first sync fails while they still come.
     @Test

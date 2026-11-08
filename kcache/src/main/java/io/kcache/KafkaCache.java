@@ -420,18 +420,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             return;
         }
         try {
-            try {
-                localCache.clear();
-            } catch (UnsupportedOperationException e) {
-                // As for a cache that guards its entries one by one, as Caches.concurrentCache().
-                for (K key : new ArrayList<>(localCache.keySet())) {
-                    localCache.remove(key);
-                }
-            }
+            localCache.clear();
             cacheUpdateHandler.cacheReset();
         } catch (RuntimeException e) {
-            // An Error goes on in its place, rather than be hidden under a failure that may be
-            // tried again; init has recorded its own failure first.
+            // As from a cache without clear(), which keeps its records. An Error goes on in its
+            // place, rather than be hidden under a failure that may be tried again; init has
+            // recorded its own failure first.
             failure.addSuppressed(e);
         }
     }
@@ -501,7 +495,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             // failure, as an Error or a checked exception thrown sneakily from a handler, so that
             // a later init does not leak them.
             closeClients();
-            if (lifecycle == Lifecycle.CLOSED && t instanceof RuntimeException
+            if (lifecycle == Lifecycle.CLOSED && !(t instanceof Error)
                 && !(t instanceof ClosedDuringInitException)) {
                 // As a read that a close() stopped, with what it failed with as the cause. An
                 // Error goes on as it is, rather than be hidden under a failure.

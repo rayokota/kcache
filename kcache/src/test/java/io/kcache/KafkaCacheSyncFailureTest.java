@@ -581,10 +581,11 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
     }
 
     // Where a close() from an update handler leaves the reader thread to close the rest of the
-    // cache, what that fails with is thrown by the application's own close(), and the handler,
-    // closed after the local cache, is closed though the local cache fails to close.
+    // cache, the handler, closed after the local cache, is closed though the local cache fails to
+    // close. The failure is logged, with nothing left to throw it to, and the application's own
+    // close() does not close anything again.
     @Test
-    public void testACloseFromAnUpdateHandlerThatFailsFailsTheNextClose() throws Exception {
+    public void testACloseFromAnUpdateHandlerThatFailsStillClosesTheRest() throws Exception {
         String topic = "failed-close-from-handler";
         RecordingLocalCache localCache = new RecordingLocalCache();
         localCache.closeFailure = new UncheckedIOException(new IOException("close failed"));
@@ -593,7 +594,6 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             new KafkaCacheConfig(properties("failed-close-from-handler", topic)),
             Serdes.String(), Serdes.String(), handler, localCache);
         handler.cache = reader;
-        boolean closed = false;
         try {
             try (KafkaCache<String, String> writer =
                      cache(properties("failed-close-from-handler-writer", topic))) {
@@ -606,25 +606,8 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             assertFalse(readerThread.isAlive());
             assertEquals(1, localCache.closes.get());
             assertEquals(1, handler.closes.get());
-            try {
-                reader.close();
-                fail("close should fail");
-            } catch (IOException e) {
-                assertEquals(localCache.closeFailure, e.getCause());
-            }
-            // Thrown once.
-            reader.close();
-            closed = true;
         } finally {
-            if (!closed) {
-                try {
-                    reader.close();
-                } catch (IOException | UncheckedIOException e) {
-                    // The failure the test is after, thrown here by the reader's close or, if
-                    // the reader never closed the cache, by this one; either would hide why the
-                    // test failed.
-                }
-            }
+            reader.close();
         }
         assertEquals(1, localCache.closes.get());
         assertEquals(1, handler.closes.get());

@@ -85,7 +85,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -136,10 +135,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // Guarded by this: whether close() was called on the init thread, as from an update handler
     // during init, which cannot wait for init to end: init closes the cache once it ends.
     private boolean closeOnInitEnd;
-    // Guarded by this: whether init is doing that close, as it ends. Its thread stays initThread
-    // meanwhile, so that a close() waiting for init waits for that too, and finds what it failed
-    // with.
-    private boolean closingAfterInit;
     // Whether the rest of the cache is closed, by close() or by a reader thread closed from one
     // of its update handlers, so that it is closed once whichever does it first. Guarded by
     // restCloseLock.
@@ -147,10 +142,6 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // Held while the rest is closed, so that a second close() waits for the first to have closed
     // it, rather than return while it still closes. Not this, which syncs use meanwhile.
     private final Object restCloseLock = new Object();
-    // What a close() left to another thread failed with, where nothing could throw it: on the
-    // reader thread, closed from an update handler, or at the end of init, closed from a handler
-    // during it. The application's own close() throws it instead. Guarded by itself.
-    private final AtomicReference<Throwable> deferredCloseFailure = new AtomicReference<>();
     private boolean skipValidation;
     private boolean requireCompact;
     private boolean readOnly;
@@ -372,27 +363,14 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         initFailure = failure;
                     }
                 }
+                initThread = null;
                 closeNow = closeOnInitEnd;
                 closeOnInitEnd = false;
-                if (closeNow) {
-                    closingAfterInit = true;
-                } else {
-                    initThread = null;
-                }
-                // Syncs waiting for init go on, and a close() waiting for it to end, unless init
-                // still closes the cache.
+                // Syncs waiting for init, and a close() waiting for it to end, go on.
                 notifyAll();
             }
             if (closeNow) {
-                try {
-                    closeAfterInit(failure);
-                } finally {
-                    synchronized (this) {
-                        closingAfterInit = false;
-                        initThread = null;
-                        notifyAll();
-                    }
-                }
+                closeAfterInit(failure);
             }
         }
     }
@@ -400,7 +378,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     /**
      * The close() that an update handler called during init, on the init thread or the reader
      * thread, now that init has ended. What it fails with goes with init's own failure, if init
-     * failed; otherwise the application's next close() throws it.
+     * failed; otherwise it is logged, as nothing is left to throw it to.
      */
     private void closeAfterInit(Throwable initFailed) {
         try {
@@ -410,36 +388,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 initFailed.addSuppressed(t);
             } else {
                 log.warn("Failed to close the Kafka cache for {} after init", clientId, t);
-                // What another thread's close failed with, as the reader's, kept as it was, so
-                // that the application's close() wraps it once.
-                keepDeferredCloseFailure(
-                    t instanceof DeferredCloseException ? t.getCause() : t);
             }
-        }
-    }
-
-    /**
-     * Keeps what a close() left to another thread failed with, for the application's close() to
-     * throw, with any kept already: an Error first, which close() throws as is, with the other
-     * suppressed.
-     */
-    private void keepDeferredCloseFailure(Throwable failure) {
-        synchronized (deferredCloseFailure) {
-            Throwable kept = deferredCloseFailure.get();
-            if (kept == null) {
-                deferredCloseFailure.set(failure);
-            } else if (kept != failure) {
-                boolean failureFirst = failure instanceof Error && !(kept instanceof Error);
-                Throwable first = failureFirst ? failure : kept;
-                first.addSuppressed(failureFirst ? kept : failure);
-                deferredCloseFailure.set(first);
-            }
-        }
-    }
-
-    private Throwable takeDeferredCloseFailure() {
-        synchronized (deferredCloseFailure) {
-            return deferredCloseFailure.getAndSet(null);
         }
     }
 
@@ -1216,7 +1165,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             }
             boolean onInitThread = current == initThread;
             boolean onReader = current == kafkaTopicReader;
-            if (initThread != null && !closingAfterInit && (onInitThread || onReader)) {
+            if (initThread != null && (onInitThread || onReader)) {
                 // From an update handler during init, on the init thread, or on the reader
                 // thread while init's cacheInitialized() handler runs, neither of which can wait
                 // for init to end: init closes the cache once it ends, rather than have it closed
@@ -1227,21 +1176,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 }
                 return;
             }
-            // Waits for init to end, and for the close it does as it ends, so as to close nothing
-            // init still uses. Not on the init thread, as that close itself, nor on the reader
-            // thread, which that close waits for.
-            if (!onInitThread && !onReader) {
-                boolean interrupted = false;
-                while (initThread != null) {
-                    try {
-                        wait();
-                    } catch (InterruptedException e) {
-                        interrupted = true;
-                    }
+            // Waits for init to end, so as to close nothing init still uses.
+            boolean interrupted = false;
+            while (initThread != null) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
                 }
-                if (interrupted) {
-                    Thread.currentThread().interrupt();
-                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
             }
             if (lifecycle != Lifecycle.READY && lifecycle != Lifecycle.CLOSED) {
                 markClosedBeforeReady();
@@ -1261,24 +1206,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         } else {
             closeConsumer();
         }
+        // Closed already, and so not again, if a handler had the reader close it as it stopped.
         closeRest();
-        // Once the reader has stopped, as shutdown() waits for, it has closed the rest if a
-        // handler asked it to.
-        Throwable failure = takeDeferredCloseFailure();
-        if (failure instanceof Error) {
-            // Not wrapped in a checked exception, which a caller might catch and go on after.
-            throw (Error) failure;
-        } else if (failure != null) {
-            throw new DeferredCloseException(clientId, failure);
-        }
-    }
-
-    /** A close() that fails with what a close() left to another thread failed with. */
-    private static class DeferredCloseException extends IOException {
-        DeferredCloseException(String clientId, Throwable cause) {
-            super("Failed to close the Kafka cache for " + clientId
-                + " on the thread a close() was left to", cause);
-        }
     }
 
     // Under this: closes the cache before init has made it ready, so that no init follows and
@@ -1664,9 +1593,8 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     try {
                         closeRest();
                     } catch (Throwable t) {
-                        // Already logged; kept rather than thrown, so that it neither replaces
-                        // what the thread died of nor goes unreported.
-                        keepDeferredCloseFailure(t);
+                        // Already logged, as each failure to close is; not thrown, so as not to
+                        // replace what the thread died of.
                     }
                 }
             }

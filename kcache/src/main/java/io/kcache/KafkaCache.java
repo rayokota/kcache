@@ -620,6 +620,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // As for put(): a timeout a caller may try again after.
                 throw new CacheTimeoutException("Timed out reading to end offsets", cause);
             }
+            if (cause instanceof CacheException) {
+                // Failed by stopSyncs(), as the reader stopped: as a sync after it fails, with
+                // an exception of its own, rather than the one all the syncs it failed share.
+                synchronized (this) {
+                    throw readerStoppedException();
+                }
+            }
             throw new CacheException("Failed to read to end offsets", cause);
         }
     }

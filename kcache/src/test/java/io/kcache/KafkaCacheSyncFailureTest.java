@@ -501,11 +501,9 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
                 sync.get(30, TimeUnit.SECONDS);
                 fail("sync should fail");
             } catch (ExecutionException e) {
-                // Failed as the reader stopped, not of anything the sync went on to: the read's
-                // failure, caused by the reader stopping.
+                // Failed as the reader stopped, not of anything the sync went on to.
                 assertTrue(e.getCause() instanceof CacheException);
-                assertTrue(e.getCause().getCause() instanceof CacheException);
-                assertTrue(e.getCause().getCause().getMessage().contains("has stopped"));
+                assertTrue(e.getCause().getMessage().contains("has stopped"));
             }
             assertTrue(handler.closed.get());
         } finally {

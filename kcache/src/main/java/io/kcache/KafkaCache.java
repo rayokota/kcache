@@ -86,6 +86,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -109,6 +110,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     // Whether the rest of the cache is closed, by close() or by a reader thread closed from one
     // of its update handlers, so that it is closed once whichever does it first.
     private final AtomicBoolean restClosed = new AtomicBoolean(false);
+    // What closing the rest failed with on the reader thread, closed from an update handler,
+    // where nothing can throw it, so that the application's own close() throws it instead.
+    private final AtomicReference<Exception> readerCloseFailure = new AtomicReference<>();
     // Guarded by this: whether init has succeeded, so that syncs go on, and why it has not, once
     // init has failed or the cache is closed first, so that the syncs waiting for it fail.
     private boolean initDone;
@@ -998,17 +1002,39 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             closeConsumer();
         }
         closeRest();
+        // Once the reader has stopped, as shutdown() waits for, it has closed the rest if a
+        // handler asked it to.
+        Exception failure = readerCloseFailure.getAndSet(null);
+        if (failure != null) {
+            throw new IOException(
+                "Failed to close the Kafka cache for " + clientId + " on its reader thread",
+                failure);
+        }
     }
 
-    // Closes what the cache reads into and writes with, once no reader thread uses it.
+    // Closes what the cache reads into and writes with, once no reader thread uses it. Each is
+    // closed though one before it fails, as no later call closes any, and the first failure is
+    // thrown, with the others logged.
     private void closeRest() throws IOException {
         if (!restClosed.compareAndSet(false, true)) {
             return;
         }
         Utils.closeQuietly(producer, "Kafka cache producer for " + clientId);
-        localCache.close();
-        checkpointHandler.close();
-        cacheUpdateHandler.close();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Utils.closeQuietly(localCache, "Kafka cache local cache for " + clientId, failure);
+        Utils.closeQuietly(checkpointHandler, "Kafka cache checkpoints for " + clientId, failure);
+        Utils.closeQuietly(cacheUpdateHandler, "Kafka cache update handler for " + clientId,
+            failure);
+        Throwable t = failure.get();
+        if (t instanceof IOException) {
+            throw (IOException) t;
+        } else if (t instanceof RuntimeException) {
+            throw (RuntimeException) t;
+        } else if (t instanceof Error) {
+            throw (Error) t;
+        } else if (t != null) {
+            throw new IOException(t);
+        }
         log.info("Kafka cache shut down complete for {}", clientId);
     }
 
@@ -1233,8 +1259,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                                                     long deadlineNanos) {
             Map<TopicPartition, Long> positions = new HashMap<>();
             for (TopicPartition tp : topicPartitions) {
-                Duration left = Duration.ofNanos(Math.max(0, deadlineNanos - System.nanoTime()));
-                positions.put(tp, position(tp, left));
+                positions.put(tp, position(tp, Duration.ofNanos(remainingNanos(deadlineNanos))));
             }
             return positions;
         }
@@ -1338,6 +1363,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                         closeRest();
                     } catch (IOException | RuntimeException e) {
                         log.warn("Failed to close the Kafka cache for {}", clientId, e);
+                        readerCloseFailure.set(e);
                     }
                 }
             }
@@ -1355,8 +1381,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
         /**
          * No read follows: the syncs waiting fail, and so do any that come later, with what the
-         * thread died of, if it did. Called by the thread as it stops, and by close() once it
-         * has, in either order, so a failure already known is kept.
+         * thread died of, if it did. Called by the thread as it stops, or by shutdown() for a
+         * thread that never started. A failure already known is kept, in case both call it, as
+         * when init() starts the thread just as close() finds it not yet started.
          */
         private void stopSyncs(Throwable failure) {
             synchronized (KafkaCache.this) {

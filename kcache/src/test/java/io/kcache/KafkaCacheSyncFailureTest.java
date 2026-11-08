@@ -490,6 +490,80 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         assertEquals(1, localCache.closes.get());
     }
 
+    // Where a close() from an update handler leaves the reader thread to close the rest of the
+    // cache, what that fails with is thrown by the application's own close(), and the handler,
+    // closed after the local cache, is closed though the local cache fails to close.
+    @Test
+    public void testACloseFromAnUpdateHandlerThatFailsFailsTheNextClose() throws Exception {
+        String topic = "failed-close-from-handler";
+        RecordingLocalCache localCache = new RecordingLocalCache();
+        localCache.closeFailure = new UncheckedIOException(new IOException("close failed"));
+        ClosingHandler handler = new ClosingHandler();
+        KafkaCache<String, String> reader = new KafkaCache<>(
+            new KafkaCacheConfig(properties("failed-close-from-handler", topic)),
+            Serdes.String(), Serdes.String(), handler, localCache);
+        handler.cache = reader;
+        boolean closed = false;
+        try {
+            try (KafkaCache<String, String> writer =
+                     cache(properties("failed-close-from-handler-writer", topic))) {
+                writer.init();
+                reader.init();
+                writer.put("k0", "v0");
+            }
+            Thread readerThread = reader.getWorkerThread();
+            readerThread.join(TimeUnit.SECONDS.toMillis(30));
+            assertFalse(readerThread.isAlive());
+            assertEquals(1, localCache.closes.get());
+            assertEquals(1, handler.closes.get());
+            try {
+                reader.close();
+                fail("close should fail");
+            } catch (IOException e) {
+                assertEquals(localCache.closeFailure, e.getCause());
+            }
+            // Thrown once.
+            reader.close();
+            closed = true;
+        } finally {
+            if (!closed) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    // The failure the test is after, which would hide why it failed.
+                }
+            }
+        }
+        assertEquals(1, localCache.closes.get());
+        assertEquals(1, handler.closes.get());
+    }
+
+    // A close() whose local cache fails to close still closes the handler, closed after it, and
+    // throws what the local cache failed with.
+    @Test
+    public void testACloseWhoseLocalCacheFailsToCloseClosesTheRest() throws Exception {
+        RecordingLocalCache localCache = new RecordingLocalCache();
+        localCache.closeFailure = new UncheckedIOException(new IOException("close failed"));
+        // No records to handle, so it never closes the cache itself.
+        ClosingHandler handler = new ClosingHandler();
+        KafkaCache<String, String> cache = new KafkaCache<>(
+            new KafkaCacheConfig(properties("failed-close", "failed-close")),
+            Serdes.String(), Serdes.String(), handler, localCache);
+        cache.init();
+        try {
+            cache.close();
+            fail("close should fail");
+        } catch (UncheckedIOException e) {
+            assertEquals(localCache.closeFailure, e);
+        }
+        assertEquals(1, localCache.closes.get());
+        assertEquals(1, handler.closes.get());
+        // Closed once.
+        cache.close();
+        assertEquals(1, localCache.closes.get());
+        assertEquals(1, handler.closes.get());
+    }
+
     /** Closes its cache from the first update it handles on the reader thread. */
     private static class ClosingHandler extends StringUpdateHandler {
         volatile KafkaCache<String, String> cache;
@@ -523,10 +597,11 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         }
     }
 
-    /** Records whether it was written to once closed. */
+    /** Records whether it was written to once closed, and fails to close, if told to. */
     private static class RecordingLocalCache extends InMemoryCache<String, String> {
         final AtomicInteger closes = new AtomicInteger();
         final AtomicBoolean usedAfterClose = new AtomicBoolean();
+        volatile UncheckedIOException closeFailure;
 
         @Override
         public String put(String key, String value) {
@@ -537,6 +612,9 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
         @Override
         public void close() {
             closes.incrementAndGet();
+            if (closeFailure != null) {
+                throw closeFailure;
+            }
         }
     }
 

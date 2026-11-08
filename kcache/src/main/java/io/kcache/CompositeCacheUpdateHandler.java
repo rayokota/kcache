@@ -19,9 +19,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.Utils;
 
 public class CompositeCacheUpdateHandler<K, V> implements CacheUpdateHandler<K, V> {
 
@@ -119,10 +121,23 @@ public class CompositeCacheUpdateHandler<K, V> implements CacheUpdateHandler<K, 
         }
     }
 
+    // Closes each handler though one before it fails, and throws the first failure, with the
+    // others logged.
     @Override
     public void close() throws IOException {
+        AtomicReference<Throwable> failure = new AtomicReference<>();
         for (CacheUpdateHandler<K, V> handler : handlers) {
-            handler.close();
+            Utils.closeQuietly(handler, "cache update handler", failure);
+        }
+        Throwable t = failure.get();
+        if (t instanceof IOException) {
+            throw (IOException) t;
+        } else if (t instanceof RuntimeException) {
+            throw (RuntimeException) t;
+        } else if (t instanceof Error) {
+            throw (Error) t;
+        } else if (t != null) {
+            throw new IOException(t);
         }
     }
 

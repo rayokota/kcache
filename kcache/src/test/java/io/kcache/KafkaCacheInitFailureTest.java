@@ -64,6 +64,20 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
         close.get(30, TimeUnit.SECONDS);
     }
 
+    // A cache closed before it was initialized cannot be initialized, as its local cache and
+    // handlers are closed.
+    @Test
+    public void testAnInitAfterCloseFails() throws Exception {
+        KafkaCache<String, String> cache = cache(properties("init-after-close"));
+        cache.close();
+        try {
+            cache.init();
+            fail("init should fail");
+        } catch (CacheInitializationException e) {
+            assertTrue(e.getMessage().contains("Cache was closed"));
+        }
+    }
+
     // An init that times out as the reader thread is made, seeking back from the end offsets of
     // partitions the topic does not have, fails as an init failure, as one that times out in
     // the read does.

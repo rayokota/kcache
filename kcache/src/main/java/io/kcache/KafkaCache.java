@@ -288,6 +288,12 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             throw new CacheInitializationException(
                 "Illegal state while initializing cache for " + clientId + ". Cache was already initialized");
         }
+        if (restClosed.get()) {
+            // Its local cache and handlers are closed, and a close() after this init would not
+            // close the clients it made.
+            throw new CacheInitializationException(
+                "Illegal state while initializing cache for " + clientId + ". Cache was closed");
+        }
         synchronized (this) {
             // A new init, as after one that failed: syncs wait for it, as for the first.
             initFailure = null;
@@ -748,6 +754,13 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     }
 
     private RecordMetadata doPut(Supplier<List<Future<RecordMetadata>>> acksSupplier) {
+        // No reader will apply the write, which would then fail once written: it fails unwritten
+        // instead, so that a caller trying it again does not write it twice.
+        if (readerStopped) {
+            synchronized (this) {
+                throw readerStoppedException();
+            }
+        }
         RecordMetadata recordMetadata = null;
         // The highest offset written to each partition by this call
         Map<Integer, Long> writtenOffsets = new HashMap<>();

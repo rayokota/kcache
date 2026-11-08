@@ -36,9 +36,11 @@ final class Closeables {
             throw (IOException) t;
         } else if (t instanceof RuntimeException) {
             throw (RuntimeException) t;
-        } else if (t != null) {
-            // A Closeable throws nothing else.
+        } else if (t instanceof Error) {
             throw (Error) t;
+        } else if (t != null) {
+            // A checked exception thrown sneakily, as Kotlin or Lombok code can.
+            throw new IOException(t);
         }
     }
 }

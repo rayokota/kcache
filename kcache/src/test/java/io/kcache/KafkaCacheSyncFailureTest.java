@@ -529,8 +529,10 @@ public class KafkaCacheSyncFailureTest extends ClusterTestHarness {
             if (!closed) {
                 try {
                     reader.close();
-                } catch (IOException e) {
-                    // The failure the test is after, which would hide why it failed.
+                } catch (IOException | UncheckedIOException e) {
+                    // The failure the test is after, thrown here by the reader's close or, if
+                    // the reader never closed the cache, by this one; either would hide why the
+                    // test failed.
                 }
             }
         }

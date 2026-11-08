@@ -1005,7 +1005,10 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         // Once the reader has stopped, as shutdown() waits for, it has closed the rest if a
         // handler asked it to.
         Throwable failure = readerCloseFailure.getAndSet(null);
-        if (failure != null) {
+        if (failure instanceof Error) {
+            // Not wrapped in a checked exception, which a caller might catch and go on after.
+            throw (Error) failure;
+        } else if (failure != null) {
             throw new IOException(
                 "Failed to close the Kafka cache for " + clientId + " on its reader thread",
                 failure);

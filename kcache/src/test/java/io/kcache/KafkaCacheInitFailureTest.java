@@ -14,13 +14,17 @@
 package io.kcache;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.kcache.exceptions.CacheInitializationException;
 import io.kcache.utils.ClusterTestHarness;
+import io.kcache.utils.InMemoryCache;
 import io.kcache.utils.StringUpdateHandler;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
 import java.util.Map;
@@ -29,6 +33,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.management.ObjectName;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -75,6 +80,241 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
             fail("init should fail");
         } catch (CacheInitializationException e) {
             assertTrue(e.getMessage().contains("Cache was closed"));
+        }
+    }
+
+    // An init while another is under way fails at once, before it makes any clients or reader
+    // thread, and the one under way still succeeds.
+    @Test
+    public void testAnInitWhileAnotherIsUnderWayFails() throws Exception {
+        BlockingInitCache localCache = new BlockingInitCache();
+        KafkaCache<String, String> cache = new KafkaCache<>(
+            new KafkaCacheConfig(properties("concurrent-init")), Serdes.String(), Serdes.String(),
+            new StringUpdateHandler(), localCache);
+        Started first = start(cache::init);
+        try {
+            assertTrue(localCache.entered.await(30, TimeUnit.SECONDS));
+            try {
+                cache.init();
+                fail("init should fail");
+            } catch (CacheInitializationException e) {
+                assertTrue(e.getMessage().contains("already being initialized"));
+            }
+            localCache.release.countDown();
+            first.get(30, TimeUnit.SECONDS);
+            Thread reader = cache.getWorkerThread();
+            assertTrue(reader.isAlive());
+        } finally {
+            localCache.release.countDown();
+            cache.close();
+        }
+    }
+
+    // A close() while init is under way, before the reader thread starts, fails that init, which
+    // then starts no reader thread and closes the clients it made.
+    @Test
+    public void testACloseWhileInitIsUnderWayFailsIt() throws Exception {
+        BlockingInitCache localCache = new BlockingInitCache();
+        KafkaCache<String, String> cache = new KafkaCache<>(
+            new KafkaCacheConfig(properties("close-during-init")), Serdes.String(), Serdes.String(),
+            new StringUpdateHandler(), localCache);
+        Started init = start(cache::init);
+        Started close;
+        try {
+            assertTrue(localCache.entered.await(30, TimeUnit.SECONDS));
+            close = start(cache::close);
+            // It waits for init to end, rather than close the local cache init is using.
+            awaitWaiting(close);
+            assertEquals(0, localCache.closes.get());
+        } finally {
+            localCache.release.countDown();
+        }
+        close.get(30, TimeUnit.SECONDS);
+        assertEquals(1, localCache.closes.get());
+        assertClosedDuringInit(init);
+        assertNull(cache.getWorkerThread());
+    }
+
+    // A close() during init's read stops the read, waits for init to end, and fails it, which
+    // then starts no reader thread and closes the clients it made.
+    @Test
+    public void testACloseDuringInitsReadStopsTheRead() throws Exception {
+        String topic = "close-during-read";
+        Properties writing = properties("close-during-read-writer");
+        writing.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        try (KafkaCache<String, String> writer = cache(writing)) {
+            writer.init();
+            for (int i = 0; i < 3; i++) {
+                writer.put("k" + i, "v" + i);
+            }
+        }
+        Properties props = properties("close-during-read");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        // Long enough that only a stopped read fails within the test's wait.
+        props.put(KafkaCacheConfig.KAFKACACHE_INIT_TIMEOUT_CONFIG, 120000);
+        // A record at a time, so that the read polls again after the first.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        HoldingFirstUpdate handler = new HoldingFirstUpdate();
+        KafkaCache<String, String> reader = cache(props, handler);
+        Started init = start(reader::init);
+        Started close;
+        try {
+            assertTrue(handler.entered.await(30, TimeUnit.SECONDS));
+            close = start(reader::close);
+            awaitWaiting(close);
+        } finally {
+            handler.release.countDown();
+        }
+        close.get(30, TimeUnit.SECONDS);
+        assertClosedDuringInit(init);
+        // The read stopped after the record it was applying, short of the other two.
+        assertEquals(1, handler.updates.get());
+        assertNull(reader.getWorkerThread());
+    }
+
+    // A close() from an update handler on the init thread, during init's read, cannot wait for
+    // init: it stops the read, and init closes the cache once it ends, and fails. The rest is
+    // closed once, though the application closes the cache too.
+    @Test
+    public void testACloseFromAHandlerDuringInitsReadIsDoneAsInitEnds() throws Exception {
+        String topic = "close-from-handler-during-read";
+        Properties writing = properties("close-from-handler-during-read-writer");
+        writing.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        try (KafkaCache<String, String> writer = cache(writing)) {
+            writer.init();
+            for (int i = 0; i < 3; i++) {
+                writer.put("k" + i, "v" + i);
+            }
+        }
+        Properties props = properties("close-from-handler-during-read");
+        props.put(KafkaCacheConfig.KAFKACACHE_TOPIC_CONFIG, topic);
+        // A record at a time, so that the read polls again after the first.
+        props.put("kafkacache." + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+        props.put("kafkacache." + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 1);
+        BlockingInitCache localCache = new BlockingInitCache();
+        localCache.release.countDown();
+        ClosingOnFirstUpdate handler = new ClosingOnFirstUpdate();
+        KafkaCache<String, String> reader = new KafkaCache<>(new KafkaCacheConfig(props),
+            Serdes.String(), Serdes.String(), handler, localCache);
+        handler.cache = reader;
+        try {
+            reader.init();
+            fail("init should fail");
+        } catch (CacheInitializationException e) {
+            assertTrue(e.getMessage().contains("Cache was closed"));
+        }
+        // The read stopped after the record the handler closed the cache from.
+        assertEquals(1, handler.updates.get());
+        assertEquals(1, localCache.closes.get());
+        assertNull(reader.getWorkerThread());
+        reader.close();
+        assertEquals(1, localCache.closes.get());
+    }
+
+    /** Closes its cache from the first update it handles. */
+    private static class ClosingOnFirstUpdate extends StringUpdateHandler {
+        volatile KafkaCache<String, String> cache;
+        final AtomicInteger updates = new AtomicInteger();
+
+        @Override
+        public void handleUpdate(String key, String value, String oldValue,
+                                 TopicPartition tp, long offset, long timestamp) {
+            super.handleUpdate(key, value, oldValue, tp, offset, timestamp);
+            if (updates.incrementAndGet() == 1) {
+                try {
+                    cache.close();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
+        }
+    }
+
+    private static void assertClosedDuringInit(FutureTask<Void> init) throws Exception {
+        try {
+            init.get(30, TimeUnit.SECONDS);
+            fail("init should fail");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof CacheInitializationException);
+            assertTrue(e.getCause().getMessage().contains("Cache was closed"));
+        }
+    }
+
+    private interface Action {
+        void run() throws Exception;
+    }
+
+    /** An action run on a thread of its own, which it keeps, to see whether it waits. */
+    private static class Started extends FutureTask<Void> {
+        final Thread thread;
+
+        Started(Action action) {
+            super(() -> {
+                action.run();
+                return null;
+            });
+            thread = new Thread(this);
+            thread.setDaemon(true);
+        }
+    }
+
+    private static Started start(Action action) {
+        Started task = new Started(action);
+        task.thread.start();
+        return task;
+    }
+
+    // Until the task's thread waits in close() for init to end, rather than anywhere else.
+    private static void awaitWaiting(Started task) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (!waitsInClose(task.thread)) {
+            assertFalse("close() returned or failed before init ended", task.isDone());
+            assertTrue("close() did not wait for init", System.nanoTime() < deadline);
+            Thread.sleep(10);
+        }
+    }
+
+    private static boolean waitsInClose(Thread thread) {
+        if (thread.getState() != Thread.State.WAITING) {
+            return false;
+        }
+        StackTraceElement[] stack = thread.getStackTrace();
+        for (int i = 0; i < stack.length - 1; i++) {
+            if (stack[i].getClassName().equals(Object.class.getName())
+                && stack[i].getMethodName().equals("wait")) {
+                // The first frame of ours past the wait.
+                for (int j = i + 1; j < stack.length; j++) {
+                    if (!stack[j].getClassName().equals(Object.class.getName())) {
+                        return stack[j].getClassName().equals(KafkaCache.class.getName())
+                            && stack[j].getMethodName().equals("close");
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Holds the first init of the local cache until released, and counts its closes. */
+    private static class BlockingInitCache extends InMemoryCache<String, String> {
+        final CountDownLatch entered = new CountDownLatch(1);
+        final CountDownLatch release = new CountDownLatch(1);
+        final AtomicInteger closes = new AtomicInteger();
+
+        @Override
+        public void close() {
+            closes.incrementAndGet();
+        }
+
+        @Override
+        public void init() {
+            entered.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            super.init();
         }
     }
 
@@ -280,10 +520,12 @@ public class KafkaCacheInitFailureTest extends ClusterTestHarness {
     private static class HoldingFirstUpdate extends StringUpdateHandler {
         final CountDownLatch entered = new CountDownLatch(1);
         final CountDownLatch release = new CountDownLatch(1);
+        final AtomicInteger updates = new AtomicInteger();
 
         @Override
         public void handleUpdate(String key, String value, String oldValue,
                                  TopicPartition tp, long offset, long timestamp) {
+            updates.incrementAndGet();
             super.handleUpdate(key, value, oldValue, tp, offset, timestamp);
             if (entered.getCount() > 0) {
                 entered.countDown();

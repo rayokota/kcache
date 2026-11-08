@@ -149,7 +149,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     private final Object restCloseLock = new Object();
     // What a close() left to another thread failed with, where nothing could throw it: on the
     // reader thread, closed from an update handler, or at the end of init, closed from a handler
-    // during it. The application's own close() throws it instead.
+    // during it. The application's own close() throws it instead. Guarded by itself.
     private final AtomicReference<Throwable> deferredCloseFailure = new AtomicReference<>();
     private boolean skipValidation;
     private boolean requireCompact;
@@ -411,15 +411,35 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             } else {
                 log.warn("Failed to close the Kafka cache for {} after init", clientId, t);
                 // What another thread's close failed with, as the reader's, kept as it was, so
-                // that the application's close() wraps it once; with any failure kept already.
-                Throwable failure = t instanceof DeferredCloseException ? t.getCause() : t;
-                if (!deferredCloseFailure.compareAndSet(null, failure)) {
-                    Throwable kept = deferredCloseFailure.get();
-                    if (kept != null && kept != failure) {
-                        kept.addSuppressed(failure);
-                    }
-                }
+                // that the application's close() wraps it once.
+                keepDeferredCloseFailure(
+                    t instanceof DeferredCloseException ? t.getCause() : t);
             }
+        }
+    }
+
+    /**
+     * Keeps what a close() left to another thread failed with, for the application's close() to
+     * throw, with any kept already: an Error first, which close() throws as is, with the other
+     * suppressed.
+     */
+    private void keepDeferredCloseFailure(Throwable failure) {
+        synchronized (deferredCloseFailure) {
+            Throwable kept = deferredCloseFailure.get();
+            if (kept == null) {
+                deferredCloseFailure.set(failure);
+            } else if (kept != failure) {
+                boolean failureFirst = failure instanceof Error && !(kept instanceof Error);
+                Throwable first = failureFirst ? failure : kept;
+                first.addSuppressed(failureFirst ? kept : failure);
+                deferredCloseFailure.set(first);
+            }
+        }
+    }
+
+    private Throwable takeDeferredCloseFailure() {
+        synchronized (deferredCloseFailure) {
+            return deferredCloseFailure.getAndSet(null);
         }
     }
 
@@ -625,11 +645,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 // As for put(): a timeout a caller may try again after.
                 throw new CacheTimeoutException("Timed out reading to end offsets", cause);
             }
-            if (cause instanceof CacheException) {
+            if (cause instanceof ReaderStoppedException) {
                 // Failed by stopSyncs(), as the reader stopped: as a sync after it fails, with
                 // an exception of its own, rather than the one all the syncs it failed share.
-                // stopSyncs() marks the reader stopped first; a failure from anything else is
-                // wrapped as any other.
                 throwIfReaderStopped();
             }
             throw new CacheException("Failed to read to end offsets", cause);
@@ -649,9 +667,17 @@ public class KafkaCache<K, V> implements Cache<K, V> {
 
     private CacheException readerStoppedException() {
         return readerFailure != null
-            ? new CacheException("The reader thread for " + clientId + " has died", readerFailure)
-            : new CacheException(
-                "The reader thread for " + clientId + " has stopped, as the cache was closed");
+            ? new ReaderStoppedException(
+                "The reader thread for " + clientId + " has died", readerFailure)
+            : new ReaderStoppedException(
+                "The reader thread for " + clientId + " has stopped, as the cache was closed", null);
+    }
+
+    /** A failure as the reader thread has stopped, by which a sync it failed is told apart. */
+    private static class ReaderStoppedException extends CacheException {
+        ReaderStoppedException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     /**
@@ -1238,7 +1264,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
         closeRest();
         // Once the reader has stopped, as shutdown() waits for, it has closed the rest if a
         // handler asked it to.
-        Throwable failure = deferredCloseFailure.getAndSet(null);
+        Throwable failure = takeDeferredCloseFailure();
         if (failure instanceof Error) {
             // Not wrapped in a checked exception, which a caller might catch and go on after.
             throw (Error) failure;
@@ -1640,7 +1666,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                     } catch (Throwable t) {
                         // Already logged; kept rather than thrown, so that it neither replaces
                         // what the thread died of nor goes unreported.
-                        deferredCloseFailure.compareAndSet(null, t);
+                        keepDeferredCloseFailure(t);
                     }
                 }
             }

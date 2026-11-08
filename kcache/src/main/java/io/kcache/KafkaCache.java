@@ -318,21 +318,21 @@ public class KafkaCache<K, V> implements Cache<K, V> {
     public void init() throws CacheInitializationException {
         synchronized (this) {
             switch (lifecycle) {
-                case CLOSED:
-                    if (initFailure == null) {
-                        // Closed once ready, as no failure says otherwise.
-                        throw new CacheInitializationException("Illegal state while initializing "
-                            + "cache for " + clientId + ". Cache was already initialized");
-                    }
-                    // Its local cache and handlers are closed, or closing, and a close() after
-                    // this init would not close the clients it made.
-                    throw new ClosedDuringInitException(clientId, null);
                 case INITIALIZING:
                 case INITIALIZED:
                     // Checked here, before either init makes anything, so that the one that
                     // fails leaves no clients or reader thread behind.
                     throw new CacheInitializationException("Illegal state while initializing cache for "
                         + clientId + ". Cache is already being initialized");
+                case CLOSED:
+                    if (initFailure != null) {
+                        // Closed before it was ready. Its local cache and handlers are closed, or
+                        // closing, and a close() after this init would not close the clients it
+                        // made.
+                        throw new ClosedDuringInitException(clientId, null);
+                    }
+                    // Closed once ready, as no failure says otherwise: as a ready cache.
+                    // fall through
                 case READY:
                     throw new CacheInitializationException("Illegal state while initializing cache for "
                         + clientId + ". Cache was already initialized");
@@ -515,18 +515,19 @@ public class KafkaCache<K, V> implements Cache<K, V> {
                 this.kafkaTopicReader.start();
                 lifecycle = Lifecycle.INITIALIZED;
             }
-        } catch (RuntimeException | Error e) {
+        } catch (Throwable t) {
             // The clients are closed here, as the reader thread that would close the consumer
-            // has not started. A close() waits for init to end, so it closes none of them. An
-            // Error too, as from an update handler, so that a later init does not leak them.
+            // has not started. A close() waits for init to end, so it closes none of them. Any
+            // failure, as an Error or a checked exception thrown sneakily from a handler, so that
+            // a later init does not leak them.
             closeClients();
-            if (lifecycle == Lifecycle.CLOSED && e instanceof RuntimeException
-                && !(e instanceof ClosedDuringInitException) && causedByWakeup(e)) {
+            if (lifecycle == Lifecycle.CLOSED && !(t instanceof ClosedDuringInitException)
+                && causedByWakeup(t)) {
                 // As a read that a close() stopped, rather than one that failed of itself as the
                 // close came.
-                throw new ClosedDuringInitException(clientId, e);
+                throw new ClosedDuringInitException(clientId, t);
             }
-            throw e;
+            throw t;
         }
         try {
             cacheUpdateHandler.cacheInitialized(count, checkpoints);

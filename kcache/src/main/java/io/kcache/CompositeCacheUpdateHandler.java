@@ -14,6 +14,7 @@
 
 package io.kcache;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -119,11 +120,11 @@ public class CompositeCacheUpdateHandler<K, V> implements CacheUpdateHandler<K, 
         }
     }
 
+    // Closes each handler though one before it fails. Every failure is logged, and the first is
+    // thrown.
     @Override
     public void close() throws IOException {
-        for (CacheUpdateHandler<K, V> handler : handlers) {
-            handler.close();
-        }
+        Closeables.closeAll("cache update handler", handlers.toArray(new Closeable[0]));
     }
 
     @Override

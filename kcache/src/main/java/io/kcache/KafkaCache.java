@@ -413,7 +413,7 @@ public class KafkaCache<K, V> implements Cache<K, V> {
      * init after it starts as a new cache would, rather than keep records that the topic, read
      * again, may no longer have. A persistent cache keeps them, as after a restart. So does one
      * the init got as far as initializing, as before a cacheInitialized() handler that threw,
-     * whose records they then are.
+     * whose records they then are, and one that cannot be cleared.
      */
     private void discardFailedInit(Throwable failure) {
         if (localCache.isPersistent() || isInitialized()) {
@@ -423,9 +423,9 @@ public class KafkaCache<K, V> implements Cache<K, V> {
             localCache.clear();
             cacheUpdateHandler.cacheReset();
         } catch (RuntimeException e) {
-            // As from a cache without clear(), which keeps its records. An Error goes on in its
-            // place, rather than be hidden under a failure that may be tried again; init has
-            // recorded its own failure first.
+            // As from a cache without clear(), which keeps its records, or from the handler's
+            // reset, once they are gone. An Error goes on in its place, rather than be hidden
+            // under a failure that may be tried again; init has recorded its own failure first.
             failure.addSuppressed(e);
         }
     }
